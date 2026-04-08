@@ -117,36 +117,75 @@ export default function GolfPoolSnakeDraftApp() {
 
   useEffect(() => {
     if (!selectedTournamentId) return;
-    const fetchField = async () => {
+useEffect(() => {
+  if (!selectedTournamentId) return;
+
+  const fetchField = async () => {
+    try {
+      setLoadingField(true);
+      setError("");
+
+      let cursor = null;
+      let allPlayers = [];
+      let keepGoing = true;
+
+      while (keepGoing) {
+        const cursorParam = cursor ? `&cursor=${cursor}` : "";
+        const data = await apiFetch(
+          `/tournament_field?tournament_id=${selectedTournamentId}&per_page=100${cursorParam}`
+        );
+
+        allPlayers = [
+          ...allPlayers,
+          ...((data.data || []).map((entry) => ({
+            id: String(entry.player.id),
+            name: entry.player.display_name,
+          }))),
+        ];
+
+        cursor = data.meta?.next_cursor ?? null;
+        keepGoing = Boolean(cursor);
+      }
+
+      allPlayers.sort((a, b) => a.name.localeCompare(b.name));
+      setFieldPlayers(allPlayers);
+    } catch (fieldErr) {
       try {
-        setLoadingField(true);
         let cursor = null;
         let allPlayers = [];
         let keepGoing = true;
+
         while (keepGoing) {
           const cursorParam = cursor ? `&cursor=${cursor}` : "";
-          const data = await apiFetch(`/tournament_field?tournament_id=${selectedTournamentId}&per_page=100${cursorParam}`);
+          const data = await apiFetch(`/players?per_page=100${cursorParam}`);
+
           allPlayers = [
             ...allPlayers,
-            ...((data.data || []).map((entry) => ({
-              id: String(entry.player.id),
-              name: entry.player.display_name,
+            ...((data.data || []).map((player) => ({
+              id: String(player.id),
+              name: player.display_name,
             }))),
           ];
+
           cursor = data.meta?.next_cursor ?? null;
           keepGoing = Boolean(cursor);
         }
+
         allPlayers.sort((a, b) => a.name.localeCompare(b.name));
         setFieldPlayers(allPlayers);
-      } catch {
+        setError("Tournament field unavailable on current API plan. Using PGA player list instead.");
+      } catch (playersErr) {
+        console.error("Field fallback failed:", playersErr);
         setFieldPlayers([]);
-        setError("Could not load the tournament field.");
-      } finally {
-        setLoadingField(false);
+        setError("Could not load golfers.");
       }
-    };
-    fetchField();
-  }, [selectedTournamentId]);
+    } finally {
+      setLoadingField(false);
+    }
+  };
+
+  fetchField();
+}, [selectedTournamentId]);
 
   useEffect(() => {
     if (!selectedTournamentId) return;
