@@ -172,11 +172,24 @@ useEffect(() => {
         allPlayers.sort((a, b) => a.name.localeCompare(b.name));
         setFieldPlayers(allPlayers);
         setError("Tournament field unavailable on current API plan. Using PGA player list instead.");
-      } catch (playersErr) {
-        console.error("Field fallback failed:", playersErr);
-        setFieldPlayers([]);
-        setError("Could not load golfers.");
-      }
+    } catch (fieldErr) {
+  try {
+    const data = await apiFetch(`/players?per_page=50`);
+
+    const allPlayers = (data.data || []).map((player) => ({
+      id: String(player.id),
+      name: player.display_name,
+    }));
+
+    allPlayers.sort((a, b) => a.name.localeCompare(b.name));
+    setFieldPlayers(allPlayers);
+    setError("Using PGA player list (free mode).");
+  } catch (playersErr) {
+    console.error("Players fallback failed:", playersErr);
+    setFieldPlayers([]);
+    setError(`Could not load golfers: ${playersErr.message}`);
+  }
+}
     } finally {
       setLoadingField(false);
     }
@@ -186,27 +199,8 @@ useEffect(() => {
 }, [selectedTournamentId]);
 
   useEffect(() => {
-    if (!selectedTournamentId) return;
-    const fetchLiveLeaderboard = async () => {
-      try {
-        const data = await apiFetch(`/tournament_results?tournament_ids[]=${selectedTournamentId}&per_page=100`);
-        const board = {};
-        (data.data || []).forEach((result) => {
-          board[String(result.player.id)] = {
-            position: result.position,
-            toPar: Number(result.par_relative_score ?? 0),
-            playerName: result.player.display_name,
-          };
-        });
-        setLiveBoard(board);
-      } catch {
-        setLiveBoard({});
-      }
-    };
-    fetchLiveLeaderboard();
-    const interval = setInterval(fetchLiveLeaderboard, 60000);
-    return () => clearInterval(interval);
-  }, [selectedTournamentId]);
+  setLiveBoard({});
+}, [selectedTournamentId]);
 
   useEffect(() => {
     if (!activePoolCode) return;
