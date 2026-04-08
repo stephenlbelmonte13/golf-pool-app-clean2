@@ -115,8 +115,6 @@ export default function GolfPoolSnakeDraftApp() {
     fetchTournaments();
   }, []);
 
-  useEffect(() => {
-    if (!selectedTournamentId) return;
 useEffect(() => {
   if (!selectedTournamentId) return;
 
