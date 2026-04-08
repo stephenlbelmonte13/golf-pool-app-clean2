@@ -174,7 +174,7 @@ useEffect(() => {
         setError("Tournament field unavailable on current API plan. Using PGA player list instead.");
     } catch (fieldErr) {
   try {
-    const data = await apiFetch(`/players?per_page=50`);
+    const data = await apiFetch(`/players?per_page=25&active=true`);
 
     const allPlayers = (data.data || []).map((player) => ({
       id: String(player.id),
