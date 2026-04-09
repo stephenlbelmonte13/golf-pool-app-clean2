@@ -556,7 +556,14 @@ useEffect(() => {
                 className="border rounded-2xl p-2"
                 value={selectedPlayerId}
                 onChange={(e) => setSelectedPlayerId(e.target.value)}
-                disabled={!user || !activePoolCode || draftStatus !== "live" || loadingField || !fieldPlayers.length || myRosterComplete || currentTurnUserId !== user?.uid}
+               disabled={
+  !user ||
+  !activePoolCode ||
+  loadingField ||
+  !fieldPlayers.length ||
+  myRosterComplete ||
+  (draftStatus === "live" && currentTurnUserId !== user?.uid)
+}
               >
                 <option value="">{loadingField ? "Loading field..." : "Select golfer"}</option>
                 {fieldPlayers.map((player) => (
