@@ -348,17 +348,14 @@ useEffect(() => {
   const takenPlayerIds = useMemo(() => new Set(picksInTournament.map((p) => p.playerId)), [picksInTournament]);
   const selectedPlayer = useMemo(() => fieldPlayers.find((p) => p.id === selectedPlayerId) || null, [fieldPlayers, selectedPlayerId]);
 
-  const canDraft = Boolean(
-    user &&
-      activePoolCode &&
-      selectedTournamentId &&
-      selectedPlayer &&
-      draftStatus === "live" &&
-      !locked &&
-      currentTurnUserId === user.uid &&
-      myPicks.length < picksPerUser &&
-      !takenPlayerIds.has(selectedPlayer.id)
-  );
+const canDraft = Boolean(
+  user &&
+  activePoolCode &&
+  selectedTournamentId &&
+  selectedPlayer &&
+  myPicks.length < picksPerUser &&
+  !takenPlayerIds.has(selectedPlayer.id)
+);
 
   const advanceDraft = async (nextPickNumber) => {
     const finished = nextPickNumber > totalDraftPicks;
