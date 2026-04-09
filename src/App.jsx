@@ -14,7 +14,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
-const API_KEY = "YOUR_PGA_API_KEY";
+const API_KEY = import.meta.env.VITE_PGA_API_KEY;
 const API_BASE = "https://api.balldontlie.io/pga/v1";
 
 export default function LivePgaLeaderboardTracker() {
