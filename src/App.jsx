@@ -179,23 +179,21 @@ useEffect(() => {
       (data.data || []).forEach((result) => {
         board[String(result.player.id)] = {
           position: result.position,
-          positionNumeric: result.position_numeric,
           toPar: Number(result.par_relative_score ?? 0),
-          totalScore: Number(result.total_score ?? 0),
           playerName: result.player.display_name,
         };
       });
 
       setLiveBoard(board);
     } catch (err) {
-      console.error("Live leaderboard error:", err);
+      console.error("Live scoring error:", err);
+      setError(`Live scoring error: ${err.message}`);
       setLiveBoard({});
-      setError(`Could not load live scoring: ${err.message}`);
     }
   };
 
   fetchLiveLeaderboard();
-  const interval = setInterval(fetchLiveLeaderboard, 60000);
+  const interval = setInterval(fetchLiveLeaderboard, 30000); // every 30 sec
   return () => clearInterval(interval);
 }, [selectedTournamentId]);
 
