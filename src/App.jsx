@@ -168,10 +168,35 @@ export default function GolfPoolSnakeDraftApp() {
 
 useEffect(() => {
   if (!selectedTournamentId) return;
-  setLoadingField(true);
-  setFieldPlayers(FALLBACK_PLAYERS);
-  setError("Using built-in golfer list. Live scoring requires a paid PGA data plan.");
-  setLoadingField(false);
+
+  const fetchLiveLeaderboard = async () => {
+    try {
+      const data = await apiFetch(
+        `/tournament_results?tournament_ids[]=${selectedTournamentId}&per_page=100`
+      );
+
+      const board = {};
+      (data.data || []).forEach((result) => {
+        board[String(result.player.id)] = {
+          position: result.position,
+          positionNumeric: result.position_numeric,
+          toPar: Number(result.par_relative_score ?? 0),
+          totalScore: Number(result.total_score ?? 0),
+          playerName: result.player.display_name,
+        };
+      });
+
+      setLiveBoard(board);
+    } catch (err) {
+      console.error("Live leaderboard error:", err);
+      setLiveBoard({});
+      setError(`Could not load live scoring: ${err.message}`);
+    }
+  };
+
+  fetchLiveLeaderboard();
+  const interval = setInterval(fetchLiveLeaderboard, 60000);
+  return () => clearInterval(interval);
 }, [selectedTournamentId]);
 
   useEffect(() => {
