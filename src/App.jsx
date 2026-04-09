@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 
 const firebaseConfig = {
   apiKey: "YOUR_API_KEY",
@@ -120,14 +118,13 @@ export default function LivePgaLeaderboardTracker() {
   );
 
   const leaderboardRows = useMemo(() => {
-    const rows = Object.values(liveBoard)
+    return Object.values(liveBoard)
       .filter((row) => row.playerName.toLowerCase().includes(search.trim().toLowerCase()))
       .sort((a, b) => {
         const aPos = typeof a.positionNumeric === "number" ? a.positionNumeric : Number.MAX_SAFE_INTEGER;
         const bPos = typeof b.positionNumeric === "number" ? b.positionNumeric : Number.MAX_SAFE_INTEGER;
         return aPos - bPos || a.playerName.localeCompare(b.playerName);
       });
-    return rows;
   }, [liveBoard, search]);
 
   const formatScore = (value) => {
@@ -140,27 +137,30 @@ export default function LivePgaLeaderboardTracker() {
     return value.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
   };
 
+  const panelClass = "rounded-2xl shadow-sm border bg-white";
+  const buttonClass = "rounded-2xl px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed";
+
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6 grid gap-4">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold">Live PGA Leaderboard Tracker</h1>
-          <p className="text-sm text-muted-foreground">Simple live tournament scoring board with search and auto-refresh.</p>
+          <p className="text-sm text-slate-500">Simple live tournament scoring board with search and auto-refresh.</p>
         </div>
         <div className="flex gap-2 items-center">
           {user ? (
             <>
               <div className="text-sm">{user.displayName || user.email}</div>
-              <Button onClick={signOutUser} className="rounded-2xl">Sign Out</Button>
+              <button onClick={signOutUser} className={buttonClass}>Sign Out</button>
             </>
           ) : (
-            <Button onClick={signIn} className="rounded-2xl">Sign In with Google</Button>
+            <button onClick={signIn} className={buttonClass}>Sign In with Google</button>
           )}
         </div>
       </div>
 
-      <Card className="rounded-2xl shadow-sm">
-        <CardContent className="p-4 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+      <div className={panelClass}>
+        <div className="p-4 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
           <div className="grid gap-2">
             <label className="text-sm font-medium">Tournament</label>
             <select
@@ -189,34 +189,36 @@ export default function LivePgaLeaderboardTracker() {
           </div>
 
           <div className="flex flex-col justify-end text-sm">
-            <div className="text-muted-foreground">Last updated</div>
+            <div className="text-slate-500">Last updated</div>
             <div className="font-medium">{formatUpdated(lastUpdated)}</div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {selectedTournament && (
-        <Card className="rounded-2xl shadow-sm">
-          <CardContent className="p-4 grid gap-1 md:grid-cols-2">
+        <div className={panelClass}>
+          <div className="p-4 grid gap-1 md:grid-cols-2">
             <div>
-              <div className="text-sm text-muted-foreground">Tournament</div>
+              <div className="text-sm text-slate-500">Tournament</div>
               <div className="text-lg font-semibold">{selectedTournament.name}</div>
-              <div className="text-sm text-muted-foreground">{selectedTournament.status}</div>
+              <div className="text-sm text-slate-500">{selectedTournament.status}</div>
             </div>
             <div className="md:text-right">
-              <div className="text-sm text-muted-foreground">Dates</div>
-              <div className="text-sm">{selectedTournament.startDate || "—"} {selectedTournament.endDate ? `to ${selectedTournament.endDate}` : ""}</div>
-              <div className="text-sm text-muted-foreground">{selectedTournament.venue || ""}</div>
+              <div className="text-sm text-slate-500">Dates</div>
+              <div className="text-sm">
+                {selectedTournament.startDate || "—"} {selectedTournament.endDate ? `to ${selectedTournament.endDate}` : ""}
+              </div>
+              <div className="text-sm text-slate-500">{selectedTournament.venue || ""}</div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
-      <Card className="rounded-2xl shadow-sm">
-        <CardContent className="p-4">
+      <div className={panelClass}>
+        <div className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="text-xl font-semibold">Leaderboard</div>
-            <div className="text-sm text-muted-foreground">
+            <div className="text-sm text-slate-500">
               {loadingScores ? "Refreshing..." : `${leaderboardRows.length} golfers`}
             </div>
           </div>
@@ -240,7 +242,15 @@ export default function LivePgaLeaderboardTracker() {
                     <td className="py-2">{row.position || "—"}</td>
                     <td className="py-2 font-medium">{row.playerName}</td>
                     <td className="py-2">{row.country || "—"}</td>
-                    <td className={`py-2 ${row.toPar < 0 ? "text-green-600 font-semibold" : row.toPar > 0 ? "text-red-600 font-semibold" : "font-semibold"}`}>
+                    <td
+                      className={`py-2 ${
+                        row.toPar < 0
+                          ? "text-green-600 font-semibold"
+                          : row.toPar > 0
+                          ? "text-red-600 font-semibold"
+                          : "font-semibold"
+                      }`}
+                    >
                       {formatScore(row.toPar)}
                     </td>
                     <td className="py-2">{Number.isFinite(row.totalScore) ? row.totalScore : "—"}</td>
@@ -249,8 +259,8 @@ export default function LivePgaLeaderboardTracker() {
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
