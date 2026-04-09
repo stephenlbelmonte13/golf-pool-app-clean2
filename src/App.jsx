@@ -38,7 +38,58 @@ const API_KEY = import.meta.env.VITE_PGA_API_KEY;
 const API_BASE = "https://api.balldontlie.io/pga/v1";
 const PICKS_PER_USER = 3;
 const DEFAULT_PICK_SECONDS = 60;
-
+const FALLBACK_PLAYERS = [
+  { id: "p1", name: "Scottie Scheffler" },
+  { id: "p2", name: "Rory McIlroy" },
+  { id: "p3", name: "Jon Rahm" },
+  { id: "p4", name: "Xander Schauffele" },
+  { id: "p5", name: "Collin Morikawa" },
+  { id: "p6", name: "Ludvig Åberg" },
+  { id: "p7", name: "Viktor Hovland" },
+  { id: "p8", name: "Patrick Cantlay" },
+  { id: "p9", name: "Justin Thomas" },
+  { id: "p10", name: "Jordan Spieth" },
+  { id: "p11", name: "Hideki Matsuyama" },
+  { id: "p12", name: "Tommy Fleetwood" },
+  { id: "p13", name: "Brooks Koepka" },
+  { id: "p14", name: "Bryson DeChambeau" },
+  { id: "p15", name: "Max Homa" },
+  { id: "p16", name: "Tony Finau" },
+  { id: "p17", name: "Sam Burns" },
+  { id: "p18", name: "Matt Fitzpatrick" },
+  { id: "p19", name: "Sungjae Im" },
+  { id: "p20", name: "Wyndham Clark" },
+  { id: "p21", name: "Keegan Bradley" },
+  { id: "p22", name: "Russell Henley" },
+  { id: "p23", name: "Sahith Theegala" },
+  { id: "p24", name: "Cameron Young" },
+  { id: "p25", name: "Tom Kim" },
+  { id: "p26", name: "Rickie Fowler" },
+  { id: "p27", name: "Corey Conners" },
+  { id: "p28", name: "Dustin Johnson" },
+  { id: "p29", name: "Cameron Smith" },
+  { id: "p30", name: "Tyrrell Hatton" },
+  { id: "p31", name: "Joaquín Niemann" },
+  { id: "p32", name: "Min Woo Lee" },
+  { id: "p33", name: "Shane Lowry" },
+  { id: "p34", name: "Jason Day" },
+  { id: "p35", name: "Brian Harman" },
+  { id: "p36", name: "Robert MacIntyre" },
+  { id: "p37", name: "Akshay Bhatia" },
+  { id: "p38", name: "Denny McCarthy" },
+  { id: "p39", name: "Si Woo Kim" },
+  { id: "p40", name: "Adam Scott" },
+  { id: "p41", name: "Sepp Straka" },
+  { id: "p42", name: "Harris English" },
+  { id: "p43", name: "Billy Horschel" },
+  { id: "p44", name: "Will Zalatoris" },
+  { id: "p45", name: "Lucas Glover" },
+  { id: "p46", name: "J.T. Poston" },
+  { id: "p47", name: "Kurt Kitayama" },
+  { id: "p48", name: "Maverick McNealy" },
+  { id: "p49", name: "Cameron Davis" },
+  { id: "p50", name: "Byeong Hun An" }
+];
 function shuffleArray(items) {
   const arr = [...items];
   for (let i = arr.length - 1; i > 0; i -= 1) {
@@ -117,85 +168,10 @@ export default function GolfPoolSnakeDraftApp() {
 
 useEffect(() => {
   if (!selectedTournamentId) return;
-
-  const fetchField = async () => {
-    try {
-      setLoadingField(true);
-      setError("");
-
-      let cursor = null;
-      let allPlayers = [];
-      let keepGoing = true;
-
-      while (keepGoing) {
-        const cursorParam = cursor ? `&cursor=${cursor}` : "";
-        const data = await apiFetch(
-          `/tournament_field?tournament_id=${selectedTournamentId}&per_page=100${cursorParam}`
-        );
-
-        allPlayers = [
-          ...allPlayers,
-          ...((data.data || []).map((entry) => ({
-            id: String(entry.player.id),
-            name: entry.player.display_name,
-          }))),
-        ];
-
-        cursor = data.meta?.next_cursor ?? null;
-        keepGoing = Boolean(cursor);
-      }
-
-      allPlayers.sort((a, b) => a.name.localeCompare(b.name));
-      setFieldPlayers(allPlayers);
-    } catch (fieldErr) {
-      try {
-        let cursor = null;
-        let allPlayers = [];
-        let keepGoing = true;
-
-        while (keepGoing) {
-          const cursorParam = cursor ? `&cursor=${cursor}` : "";
-          const data = await apiFetch(`/players?per_page=100${cursorParam}`);
-
-          allPlayers = [
-            ...allPlayers,
-            ...((data.data || []).map((player) => ({
-              id: String(player.id),
-              name: player.display_name,
-            }))),
-          ];
-
-          cursor = data.meta?.next_cursor ?? null;
-          keepGoing = Boolean(cursor);
-        }
-
-        allPlayers.sort((a, b) => a.name.localeCompare(b.name));
-        setFieldPlayers(allPlayers);
-        setError("Tournament field unavailable on current API plan. Using PGA player list instead.");
-    } catch (fieldErr) {
-  try {
-    const data = await apiFetch(`/players?per_page=25&active=true`);
-
-    const allPlayers = (data.data || []).map((player) => ({
-      id: String(player.id),
-      name: player.display_name,
-    }));
-
-    allPlayers.sort((a, b) => a.name.localeCompare(b.name));
-    setFieldPlayers(allPlayers);
-    setError("Using PGA player list (free mode).");
-  } catch (playersErr) {
-    console.error("Players fallback failed:", playersErr);
-    setFieldPlayers([]);
-    setError(`Could not load golfers: ${playersErr.message}`);
-  }
-}
-    } finally {
-      setLoadingField(false);
-    }
-  };
-
-  fetchField();
+  setLoadingField(true);
+  setFieldPlayers(FALLBACK_PLAYERS);
+  setError("Using built-in golfer list. Live scoring requires a paid PGA data plan.");
+  setLoadingField(false);
 }, [selectedTournamentId]);
 
   useEffect(() => {
