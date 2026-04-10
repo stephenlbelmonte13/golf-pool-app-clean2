@@ -374,7 +374,7 @@ export default function SharedPgaPoolApp() {
     <div className="max-w-7xl mx-auto p-4 md:p-6 grid gap-4 bg-slate-100 min-h-screen">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Shared PGA Pool Tracker</h1>
+          <h1 className="text-3xl font-bold">Longwoods Crusher</h1>
           <p className="text-sm text-slate-500">Create a pool, share it with friends, pick golfers, and track live scores on your phones.</p>
         </div>
         <div className="flex gap-2 items-center">
