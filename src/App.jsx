@@ -55,6 +55,7 @@ export default function SharedPgaPoolApp() {
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [search, setSearch] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [viewMode, setViewMode] = useState("pool");
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (nextUser) => setUser(nextUser));
@@ -65,10 +66,36 @@ export default function SharedPgaPoolApp() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const poolFromUrl = params.get("pool");
-    if (poolFromUrl && !activePoolCode) {
-      setPoolCodeInput(poolFromUrl.toUpperCase());
+    const savedPool = window.localStorage.getItem("pga_pool_code") || "";
+    const savedTournament = window.localStorage.getItem("pga_tournament_id") || "";
+
+    if (poolFromUrl) {
+      const code = poolFromUrl.toUpperCase();
+      setPoolCodeInput(code);
+      setActivePoolCode(code);
+    } else if (savedPool && !activePoolCode) {
+      setPoolCodeInput(savedPool);
+      setActivePoolCode(savedPool);
+    }
+
+    if (savedTournament && !selectedTournamentId) {
+      setSelectedTournamentId(savedTournament);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (activePoolCode) {
+      window.localStorage.setItem("pga_pool_code", activePoolCode);
     }
   }, [activePoolCode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (selectedTournamentId) {
+      window.localStorage.setItem("pga_tournament_id", selectedTournamentId);
+    }
+  }, [selectedTournamentId]);
 
   const apiFetch = async (path) => {
     const res = await fetch(`${API_BASE}${path}`, {
@@ -100,7 +127,9 @@ export default function SharedPgaPoolApp() {
         }));
         setTournaments(list);
         if (!selectedTournamentId && list.length) {
-          const preferred = list.find((t) => t.status === "In Progress") || list[0];
+          const savedTournament = typeof window !== "undefined" ? window.localStorage.getItem("pga_tournament_id") : "";
+          const savedMatch = list.find((t) => t.id === savedTournament);
+          const preferred = savedMatch || list.find((t) => t.status === "In Progress") || list[0];
           setSelectedTournamentId(preferred.id);
         }
       } catch (err) {
@@ -212,7 +241,9 @@ export default function SharedPgaPoolApp() {
       if (snap.exists()) {
         const data = snap.data();
         setPoolSettings(data);
-        if (data.tournamentId) setSelectedTournamentId(data.tournamentId);
+        if (data.tournamentId) {
+          setSelectedTournamentId(data.tournamentId);
+        }
       } else {
         setPoolSettings(null);
       }
@@ -327,6 +358,26 @@ export default function SharedPgaPoolApp() {
     [tournaments, selectedTournamentId]
   );
 
+  const draftedLiveRows = useMemo(() => {
+    return picks
+      .filter((pick) => pick.tournamentId === selectedTournamentId)
+      .map((pick) => {
+        const live = liveBoard[pick.playerId] || null;
+        return {
+          ...pick,
+          position: live?.position || "—",
+          toPar: live?.toPar ?? null,
+          totalScore: live?.totalScore ?? null,
+          country: live?.country || "",
+        };
+      })
+      .sort((a, b) => {
+        const aScore = a.toPar ?? Number.MAX_SAFE_INTEGER;
+        const bScore = b.toPar ?? Number.MAX_SAFE_INTEGER;
+        return aScore - bScore || a.golfer.localeCompare(b.golfer);
+      });
+  }, [picks, selectedTournamentId, liveBoard]);
+
   const leaderboardRows = useMemo(() => {
     return Object.values(liveBoard)
       .filter((row) => row.playerName.toLowerCase().includes(search.trim().toLowerCase()))
@@ -370,11 +421,14 @@ export default function SharedPgaPoolApp() {
     return value.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
   };
 
+  const hasPoolContext = Boolean(activePoolCode);
+  const hasDraftedPlayers = draftedLiveRows.length > 0;
+
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6 grid gap-4 bg-slate-100 min-h-screen">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Longwoods Crusher</h1>
+          <h1 className="text-3xl font-bold">Shared PGA Pool Tracker</h1>
           <p className="text-sm text-slate-500">Create a pool, share it with friends, pick golfers, and track live scores on your phones.</p>
         </div>
         <div className="flex gap-2 items-center">
@@ -456,18 +510,35 @@ export default function SharedPgaPoolApp() {
         </div>
       </div>
 
+      <div className={panelClass}>
+        <div className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <div className="text-sm text-slate-500">App opens back to your saved pool and tournament.</div>
+            <div className="text-sm font-medium">Current view: {viewMode === "pool" ? "Your drafted golfers" : "Full tournament board"}</div>
+          </div>
+          <div className="flex gap-2">
+            <button className={viewMode === "pool" ? buttonClass : outlineButtonClass} onClick={() => setViewMode("pool")}>
+              My Pool Scores
+            </button>
+            <button className={viewMode === "all" ? buttonClass : outlineButtonClass} onClick={() => setViewMode("all")}>
+              Full Leaderboard
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <div className={panelClass}>
           <div className="p-4">
             <div className="flex items-center justify-between mb-3">
-              <div className="text-xl font-semibold">Live Leaderboard</div>
+              <div className="text-xl font-semibold">{viewMode === "pool" ? "Your Drafted Golfers Live Scores" : "Live Leaderboard"}</div>
               <div className="text-sm text-slate-500">{loadingScores ? "Refreshing..." : `Updated ${formatUpdated(lastUpdated)}`}</div>
             </div>
 
             <div className="mb-3">
               <input
                 className="border rounded-2xl p-2 w-full"
-                placeholder="Search golfer"
+                placeholder={viewMode === "pool" ? "Search drafted golfer or owner" : "Search golfer"}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -475,36 +546,75 @@ export default function SharedPgaPoolApp() {
 
             {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2">Pos</th>
-                    <th className="text-left py-2">Player</th>
-                    <th className="text-left py-2">Country</th>
-                    <th className="text-left py-2">To Par</th>
-                    <th className="text-left py-2">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaderboardRows.map((row, index) => (
-                    <tr
-                      key={row.playerId}
-                      className={`border-b cursor-pointer ${index === 0 ? "bg-green-50" : ""} ${selectedBoardPlayerId === row.playerId ? "bg-slate-100" : ""}`}
-                      onClick={() => setSelectedBoardPlayerId(row.playerId)}
-                    >
-                      <td className="py-2">{row.position || "—"}</td>
-                      <td className="py-2 font-medium">{row.playerName}</td>
-                      <td className="py-2">{row.country || "—"}</td>
-                      <td className={`py-2 ${row.toPar < 0 ? "text-green-600 font-semibold" : row.toPar > 0 ? "text-red-600 font-semibold" : "font-semibold"}`}>
-                        {formatScore(row.toPar)}
-                      </td>
-                      <td className="py-2">{Number.isFinite(row.totalScore) ? row.totalScore : "—"}</td>
+            {viewMode === "pool" ? (
+              hasDraftedPlayers ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2">Owner</th>
+                        <th className="text-left py-2">Golfer</th>
+                        <th className="text-left py-2">Pos</th>
+                        <th className="text-left py-2">To Par</th>
+                        <th className="text-left py-2">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {draftedLiveRows
+                        .filter((row) => {
+                          const q = search.trim().toLowerCase();
+                          if (!q) return true;
+                          return row.golfer.toLowerCase().includes(q) || row.userName.toLowerCase().includes(q);
+                        })
+                        .map((row) => (
+                          <tr key={row.id} className="border-b">
+                            <td className="py-2 font-medium">{row.userName}</td>
+                            <td className="py-2">{row.golfer}</td>
+                            <td className="py-2">{row.position}</td>
+                            <td className={`py-2 ${row.toPar < 0 ? "text-green-600 font-semibold" : row.toPar > 0 ? "text-red-600 font-semibold" : "font-semibold"}`}>
+                              {row.toPar === null ? "—" : formatScore(row.toPar)}
+                            </td>
+                            <td className="py-2">{Number.isFinite(row.totalScore) ? row.totalScore : "—"}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-sm text-slate-500">Once your group drafts golfers, this screen will reopen directly to their live scores.</div>
+              )
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2">Pos</th>
+                      <th className="text-left py-2">Player</th>
+                      <th className="text-left py-2">Country</th>
+                      <th className="text-left py-2">To Par</th>
+                      <th className="text-left py-2">Total</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {leaderboardRows.map((row, index) => (
+                      <tr
+                        key={row.playerId}
+                        className={`border-b cursor-pointer ${index === 0 ? "bg-green-50" : ""} ${selectedBoardPlayerId === row.playerId ? "bg-slate-100" : ""}`}
+                        onClick={() => setSelectedBoardPlayerId(row.playerId)}
+                      >
+                        <td className="py-2">{row.position || "—"}</td>
+                        <td className="py-2 font-medium">{row.playerName}</td>
+                        <td className="py-2">{row.country || "—"}</td>
+                        <td className={`py-2 ${row.toPar < 0 ? "text-green-600 font-semibold" : row.toPar > 0 ? "text-red-600 font-semibold" : "font-semibold"}`}>
+                          {formatScore(row.toPar)}
+                        </td>
+                        <td className="py-2">{Number.isFinite(row.totalScore) ? row.totalScore : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
 
@@ -512,6 +622,7 @@ export default function SharedPgaPoolApp() {
           <div className={panelClass}>
             <div className="p-4">
               <div className="text-lg font-semibold mb-3">Pool Leaderboard</div>
+              {hasPoolContext && hasDraftedPlayers && <div className="text-xs text-slate-500 mb-2">This is the screen your group will care about most after drafting.</div>}
               <div className="grid gap-2">
                 {poolLeaderboard.length === 0 ? (
                   <div className="text-sm text-slate-500">No picks yet.</div>
@@ -542,6 +653,7 @@ export default function SharedPgaPoolApp() {
           <div className={panelClass}>
             <div className="p-4">
               <div className="text-lg font-semibold mb-3">Selected Golfer Details</div>
+              <div className="text-xs text-slate-500 mb-2">Tap any golfer in the full leaderboard to inspect all available live result fields from your BallDontLie account.</div>
               {selectedBoardPlayer ? (
                 <div className="grid gap-2 text-sm">
                   <div><span className="font-medium">Player:</span> {selectedBoardPlayer.playerName}</div>
