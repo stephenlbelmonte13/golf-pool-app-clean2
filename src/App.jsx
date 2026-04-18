@@ -571,9 +571,9 @@ export default function SharedPgaPoolApp() {
                             <td className="py-2 font-medium">{row.userName}</td>
                             <td className="py-2">{row.golfer}</td>
                             <td className="py-2">{row.position}</td>
-                            <td className={`py-2 ${row.toPar < 0 ? "text-green-600 font-semibold" : row.toPar > 0 ? "text-red-600 font-semibold" : "font-semibold"}`}>
-                              {row.toPar === null ? "—" : formatScore(row.toPar)}
-                            </td>
+                            <td className={`py-3 text-xl md:text-2xl tabular-nums ${row.toPar < 0 ? "text-green-700 font-bold" : row.toPar > 0 ? "text-red-700 font-bold" : "font-bold text-stone-700"}`}>
+  {formatScore(row.toPar)}
+</td>
                             <td className="py-2">{Number.isFinite(row.totalScore) ? row.totalScore : "—"}</td>
                           </tr>
                         ))}
