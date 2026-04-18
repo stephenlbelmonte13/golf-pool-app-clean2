@@ -531,7 +531,7 @@ export default function SharedPgaPoolApp() {
         <div className={panelClass}>
           <div className="p-4">
             <div className="flex items-center justify-between mb-3">
-              <div className="text-xl font-semibold">{viewMode === "pool" ? "Your Drafted Golfers Live Scores" : "Live Leaderboard"}</div>
+             <div className="text-2xl md:text-3xl font-semibold tracking-tight text-stone-900"> {viewMode === "pool" ? "Your Drafted Golfers Live Scores" : "Live Leaderboard"}</div>
               <div className="text-sm text-slate-500">{loadingScores ? "Refreshing..." : `Updated ${formatUpdated(lastUpdated)}`}</div>
             </div>
 
@@ -551,7 +551,7 @@ export default function SharedPgaPoolApp() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b">
+                      <tr className="border-b border-stone-300 text-[11px] uppercase tracking-[0.18em] text-stone-500">
                         <th className="text-left py-2">Owner</th>
                         <th className="text-left py-2">Golfer</th>
                         <th className="text-left py-2">Pos</th>
@@ -587,7 +587,7 @@ export default function SharedPgaPoolApp() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b">
+                    <tr className="border-b border-stone-300 text-[11px] uppercase tracking-[0.18em] text-stone-500">
                       <th className="text-left py-2">Pos</th>
                       <th className="text-left py-2">Player</th>
                       <th className="text-left py-2">Country</th>
