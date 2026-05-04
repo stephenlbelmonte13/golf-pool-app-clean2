@@ -446,7 +446,7 @@ export default function SharedPgaPoolApp() {
         <div className="p-4 md:p-6 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
             <div className="text-[11px] uppercase tracking-[0.35em] text-emerald-200">Live Coverage</div>
-            <h1 className="text-3xl md:text-5xl font-semibold tracking-tight mt-2">Longwoods Ball Crusher App</h1>
+            <h1 className="text-3xl md:text-5xl font-semibold tracking-tight mt-2">Longwoods Ball Crusher</h1>
             <p className="text-sm md:text-base text-emerald-100/80 mt-2 max-w-2xl">
               Broadcast-style live leaderboard, pre-tournament draft room, and shared mobile scoring.
             </p>
