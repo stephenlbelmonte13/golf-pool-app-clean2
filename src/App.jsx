@@ -17,6 +17,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
 } from "firebase/firestore";
 
@@ -73,28 +74,22 @@ export default function SharedPgaPoolApp() {
       const code = poolFromUrl.toUpperCase();
       setPoolCodeInput(code);
       setActivePoolCode(code);
-    } else if (savedPool && !activePoolCode) {
+    } else if (savedPool) {
       setPoolCodeInput(savedPool);
       setActivePoolCode(savedPool);
     }
 
-    if (savedTournament && !selectedTournamentId) {
-      setSelectedTournamentId(savedTournament);
-    }
+    if (savedTournament) setSelectedTournamentId(savedTournament);
   }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (activePoolCode) {
-      window.localStorage.setItem("pga_pool_code", activePoolCode);
-    }
+    if (activePoolCode) window.localStorage.setItem("pga_pool_code", activePoolCode);
   }, [activePoolCode]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (selectedTournamentId) {
-      window.localStorage.setItem("pga_tournament_id", selectedTournamentId);
-    }
+    if (selectedTournamentId) window.localStorage.setItem("pga_tournament_id", selectedTournamentId);
   }, [selectedTournamentId]);
 
   const apiFetch = async (path) => {
@@ -105,7 +100,8 @@ export default function SharedPgaPoolApp() {
     return res.json();
   };
 
-  const panelClass = "rounded-2xl border bg-white shadow-sm";
+  const panelClass = "rounded-[24px] border border-stone-300 bg-white shadow-sm";
+  const darkPanelClass = "rounded-[24px] border border-stone-700 bg-[#16321f] text-white shadow-sm";
   const buttonClass =
     "rounded-2xl px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed";
   const outlineButtonClass =
@@ -125,9 +121,12 @@ export default function SharedPgaPoolApp() {
           startDate: t.start_date || "",
           endDate: t.end_date || "",
         }));
+
         setTournaments(list);
+
         if (!selectedTournamentId && list.length) {
-          const savedTournament = typeof window !== "undefined" ? window.localStorage.getItem("pga_tournament_id") : "";
+          const savedTournament =
+            typeof window !== "undefined" ? window.localStorage.getItem("pga_tournament_id") : "";
           const savedMatch = list.find((t) => t.id === savedTournament);
           const preferred = savedMatch || list.find((t) => t.status === "In Progress") || list[0];
           setSelectedTournamentId(preferred.id);
@@ -241,9 +240,7 @@ export default function SharedPgaPoolApp() {
       if (snap.exists()) {
         const data = snap.data();
         setPoolSettings(data);
-        if (data.tournamentId) {
-          setSelectedTournamentId(data.tournamentId);
-        }
+        if (data.tournamentId) setSelectedTournamentId(data.tournamentId);
       } else {
         setPoolSettings(null);
       }
@@ -268,6 +265,19 @@ export default function SharedPgaPoolApp() {
   const signIn = async () => signInWithPopup(auth, provider);
   const signOutUser = async () => signOut(auth);
 
+  const isCommissioner = Boolean(user && poolSettings && user.uid === poolSettings.commissionerId);
+  const draftOpen = poolSettings?.draftOpen ?? true;
+
+  const openDraft = async () => {
+    if (!isCommissioner || !activePoolCode) return;
+    await updateDoc(doc(db, "pools", activePoolCode), { draftOpen: true });
+  };
+
+  const closeDraft = async () => {
+    if (!isCommissioner || !activePoolCode) return;
+    await updateDoc(doc(db, "pools", activePoolCode), { draftOpen: false });
+  };
+
   const createPool = async () => {
     if (!user) return;
     const code = Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -277,6 +287,7 @@ export default function SharedPgaPoolApp() {
       commissionerName: user.displayName || user.email,
       picksPerUser: PICKS_PER_USER,
       tournamentId: selectedTournamentId || "",
+      draftOpen: true,
       createdAt: serverTimestamp(),
     });
     await setDoc(doc(db, "pools", code, "members", user.uid), {
@@ -337,7 +348,7 @@ export default function SharedPgaPoolApp() {
   );
 
   const addPick = async () => {
-    if (!user || !activePoolCode || !selectedTournamentId || !selectedPlayer) return;
+    if (!user || !activePoolCode || !selectedTournamentId || !selectedPlayer || !draftOpen) return;
     if (myPicks.length >= PICKS_PER_USER) return;
     if (takenPlayerIds.has(selectedPlayer.id)) return;
 
@@ -410,8 +421,13 @@ export default function SharedPgaPoolApp() {
   }, [picks, selectedTournamentId, liveBoard]);
 
   const selectedBoardPlayer = selectedBoardPlayerId ? liveBoard[selectedBoardPlayerId] : null;
+  const tournamentLeader = leaderboardRows[0] || null;
+  const poolLeader = poolLeaderboard[0] || null;
+  const pickedCount = picks.filter((pick) => pick.tournamentId === selectedTournamentId).length;
+  const totalPossiblePicks = Math.max(members.length, 1) * PICKS_PER_USER;
 
   const formatScore = (value) => {
+    if (value === null || value === undefined) return "—";
     if (value === 0) return "E";
     return value > 0 ? `+${value}` : `${value}`;
   };
@@ -425,21 +441,57 @@ export default function SharedPgaPoolApp() {
   const hasDraftedPlayers = draftedLiveRows.length > 0;
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-6 grid gap-4 bg-slate-100 min-h-screen">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">Shared PGA Pool Tracker</h1>
-          <p className="text-sm text-slate-500">Create a pool, share it with friends, pick golfers, and track live scores on your phones.</p>
+    <div className="max-w-7xl mx-auto p-3 md:p-6 grid gap-4 bg-[#f4f1e8] min-h-screen">
+      <div className={darkPanelClass}>
+        <div className="p-4 md:p-6 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.35em] text-emerald-200">Live Coverage</div>
+            <h1 className="text-3xl md:text-5xl font-semibold tracking-tight mt-2">Shared PGA Pool Tracker</h1>
+            <p className="text-sm md:text-base text-emerald-100/80 mt-2 max-w-2xl">
+              Broadcast-style live leaderboard, pre-tournament draft room, and shared mobile scoring.
+            </p>
+          </div>
+          <div className="flex flex-col items-start lg:items-end gap-2">
+            {user ? (
+              <>
+                <div className="text-sm text-emerald-100">{user.displayName || user.email}</div>
+                <button onClick={signOutUser} className="rounded-2xl px-4 py-2 bg-white text-[#16321f] hover:bg-emerald-50">
+                  Sign Out
+                </button>
+              </>
+            ) : (
+              <button onClick={signIn} className="rounded-2xl px-4 py-2 bg-white text-[#16321f] hover:bg-emerald-50">
+                Sign In with Google
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex gap-2 items-center">
-          {user ? (
-            <>
-              <div className="text-sm">{user.displayName || user.email}</div>
-              <button onClick={signOutUser} className={buttonClass}>Sign Out</button>
-            </>
-          ) : (
-            <button onClick={signIn} className={buttonClass}>Sign In with Google</button>
-          )}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded-[20px] bg-[#16321f] text-white p-4 shadow-sm">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">Tournament Leader</div>
+          <div className="mt-2 text-xl font-bold truncate">{tournamentLeader?.playerName || "—"}</div>
+          <div className="text-3xl font-bold tabular-nums">{tournamentLeader ? formatScore(tournamentLeader.toPar) : "—"}</div>
+        </div>
+        <div className="rounded-[20px] bg-white border border-stone-300 p-4 shadow-sm">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-stone-500">Pool Leader</div>
+          <div className="mt-2 text-xl font-bold truncate">{poolLeader?.userName || "—"}</div>
+          <div className={`text-3xl font-bold tabular-nums ${poolLeader?.total < 0 ? "text-green-700" : poolLeader?.total > 0 ? "text-red-700" : "text-stone-700"}`}>
+            {poolLeader ? formatScore(poolLeader.total) : "—"}
+          </div>
+        </div>
+        <div className="rounded-[20px] bg-white border border-stone-300 p-4 shadow-sm">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-stone-500">Draft Status</div>
+          <div className={`mt-2 text-2xl font-bold ${draftOpen ? "text-green-700" : "text-red-700"}`}>
+            {draftOpen ? "OPEN" : "LOCKED"}
+          </div>
+          <div className="text-sm text-stone-500">{pickedCount}/{totalPossiblePicks} picks made</div>
+        </div>
+        <div className="rounded-[20px] bg-white border border-stone-300 p-4 shadow-sm">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-stone-500">Updated</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums">{formatUpdated(lastUpdated)}</div>
+          <div className="text-sm text-stone-500">Auto-refresh every 30 sec</div>
         </div>
       </div>
 
@@ -462,7 +514,7 @@ export default function SharedPgaPoolApp() {
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <div className={panelClass}>
           <div className="p-4 grid gap-3">
-            <div className="text-lg font-semibold">Tournament</div>
+            <div className="text-lg font-semibold text-stone-900">Tournament</div>
             <select
               className="border rounded-2xl p-2"
               value={selectedTournamentId}
@@ -474,27 +526,33 @@ export default function SharedPgaPoolApp() {
                 <option key={t.id} value={t.id}>{t.name} ({t.status})</option>
               ))}
             </select>
-
-            {selectedTournament && (
-              <div className="text-sm text-slate-600">
-                <div className="font-medium">{selectedTournament.name}</div>
-                <div>{selectedTournament.status}</div>
-                <div>{selectedTournament.startDate || "—"} {selectedTournament.endDate ? `to ${selectedTournament.endDate}` : ""}</div>
-                <div>{selectedTournament.venue || ""}</div>
-              </div>
-            )}
           </div>
         </div>
 
         <div className={panelClass}>
           <div className="p-4 grid gap-3">
-            <div className="text-lg font-semibold">Pick Golfers</div>
-            <div className="text-sm text-slate-500">Your picks: {myPicks.length}/{PICKS_PER_USER}</div>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-stone-900">Live Draft Room</div>
+                <div className="text-sm text-stone-500">Your picks: {myPicks.length}/{PICKS_PER_USER}</div>
+              </div>
+              <div className={`text-sm font-semibold ${draftOpen ? "text-green-700" : "text-red-700"}`}>
+                {draftOpen ? "Draft Open" : "Draft Locked"}
+              </div>
+            </div>
+
+            {isCommissioner && (
+              <div className="flex gap-2">
+                <button onClick={openDraft} disabled={draftOpen} className={outlineButtonClass}>Open Draft</button>
+                <button onClick={closeDraft} disabled={!draftOpen} className={outlineButtonClass}>Lock Draft</button>
+              </div>
+            )}
+
             <select
               className="border rounded-2xl p-2"
               value={selectedPlayerId}
               onChange={(e) => setSelectedPlayerId(e.target.value)}
-              disabled={!user || !activePoolCode || loadingField || !fieldPlayers.length || myPicks.length >= PICKS_PER_USER}
+              disabled={!user || !activePoolCode || !draftOpen || loadingField || !fieldPlayers.length || myPicks.length >= PICKS_PER_USER}
             >
               <option value="">{loadingField ? "Loading tournament field..." : "Select golfer"}</option>
               {fieldPlayers.map((player) => (
@@ -503,24 +561,41 @@ export default function SharedPgaPoolApp() {
                 </option>
               ))}
             </select>
-            <button onClick={addPick} disabled={!user || !activePoolCode || !selectedPlayerId || myPicks.length >= PICKS_PER_USER} className={buttonClass}>
+
+            <button
+              onClick={addPick}
+              disabled={!user || !activePoolCode || !draftOpen || !selectedPlayerId || myPicks.length >= PICKS_PER_USER}
+              className={buttonClass}
+            >
               Add Pick
             </button>
           </div>
         </div>
       </div>
 
-      <div className={panelClass}>
+      <div className={darkPanelClass}>
         <div className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
-            <div className="text-sm text-slate-500">App opens back to your saved pool and tournament.</div>
-            <div className="text-sm font-medium">Current view: {viewMode === "pool" ? "Your drafted golfers" : "Full tournament board"}</div>
+            <div className="text-sm text-emerald-100/80">App opens back to your saved pool and tournament.</div>
+            <div className="text-sm font-medium text-white">
+              Current view: {viewMode === "pool" ? "Your drafted golfers" : "Full tournament board"}
+            </div>
           </div>
           <div className="flex gap-2">
-            <button className={viewMode === "pool" ? buttonClass : outlineButtonClass} onClick={() => setViewMode("pool")}>
+            <button
+              className={viewMode === "pool"
+                ? "rounded-2xl px-4 py-2 bg-white text-[#16321f] hover:bg-emerald-50"
+                : "rounded-2xl px-4 py-2 border border-emerald-300/40 text-white hover:bg-white/10"}
+              onClick={() => setViewMode("pool")}
+            >
               My Pool Scores
             </button>
-            <button className={viewMode === "all" ? buttonClass : outlineButtonClass} onClick={() => setViewMode("all")}>
+            <button
+              className={viewMode === "all"
+                ? "rounded-2xl px-4 py-2 bg-white text-[#16321f] hover:bg-emerald-50"
+                : "rounded-2xl px-4 py-2 border border-emerald-300/40 text-white hover:bg-white/10"}
+              onClick={() => setViewMode("all")}
+            >
               Full Leaderboard
             </button>
           </div>
@@ -531,17 +606,10 @@ export default function SharedPgaPoolApp() {
         <div className={panelClass}>
           <div className="p-4">
             <div className="flex items-center justify-between mb-3">
-             <div className="text-2xl md:text-3xl font-semibold tracking-tight text-stone-900"> {viewMode === "pool" ? "Your Drafted Golfers Live Scores" : "Live Leaderboard"}</div>
-              <div className="text-sm text-slate-500">{loadingScores ? "Refreshing..." : `Updated ${formatUpdated(lastUpdated)}`}</div>
-            </div>
-
-            <div className="mb-3">
-              <input
-                className="border rounded-2xl p-2 w-full"
-                placeholder={viewMode === "pool" ? "Search drafted golfer or owner" : "Search golfer"}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+              <div className="text-2xl md:text-3xl font-semibold tracking-tight text-stone-900">
+                {viewMode === "pool" ? "Your Drafted Golfers Live Scores" : "Live Leaderboard"}
+              </div>
+              <div className="text-sm text-stone-500">{loadingScores ? "Refreshing..." : `Updated ${formatUpdated(lastUpdated)}`}</div>
             </div>
 
             {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
@@ -560,28 +628,22 @@ export default function SharedPgaPoolApp() {
                       </tr>
                     </thead>
                     <tbody>
-                      {draftedLiveRows
-                        .filter((row) => {
-                          const q = search.trim().toLowerCase();
-                          if (!q) return true;
-                          return row.golfer.toLowerCase().includes(q) || row.userName.toLowerCase().includes(q);
-                        })
-                        .map((row) => (
-                          <tr key={row.id} className="border-b">
-                            <td className="py-2 font-medium">{row.userName}</td>
-                            <td className="py-2">{row.golfer}</td>
-                            <td className="py-2">{row.position}</td>
-                            <td className={`py-3 text-xl md:text-2xl tabular-nums ${row.toPar < 0 ? "text-green-700 font-bold" : row.toPar > 0 ? "text-red-700 font-bold" : "font-bold text-stone-700"}`}>
-  {formatScore(row.toPar)}
-</td>
-                            <td className="py-2">{Number.isFinite(row.totalScore) ? row.totalScore : "—"}</td>
-                          </tr>
-                        ))}
+                      {draftedLiveRows.map((row) => (
+                        <tr key={row.id} className="border-b border-stone-200 hover:bg-stone-50">
+                          <td className="py-3 font-medium">{row.userName}</td>
+                          <td className="py-3">{row.golfer}</td>
+                          <td className="py-3">{row.position}</td>
+                          <td className={`py-3 text-xl md:text-2xl tabular-nums ${row.toPar < 0 ? "text-green-700 font-bold" : row.toPar > 0 ? "text-red-700 font-bold" : "font-bold text-stone-700"}`}>
+                            {formatScore(row.toPar)}
+                          </td>
+                          <td className="py-3 tabular-nums">{Number.isFinite(row.totalScore) ? row.totalScore : "—"}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
               ) : (
-                <div className="text-sm text-slate-500">Once your group drafts golfers, this screen will reopen directly to their live scores.</div>
+                <div className="text-sm text-stone-500">Once your group drafts golfers, this screen will reopen directly to their live scores.</div>
               )
             ) : (
               <div className="overflow-x-auto">
@@ -599,16 +661,16 @@ export default function SharedPgaPoolApp() {
                     {leaderboardRows.map((row, index) => (
                       <tr
                         key={row.playerId}
-                        className={`border-b cursor-pointer ${index === 0 ? "bg-green-50" : ""} ${selectedBoardPlayerId === row.playerId ? "bg-slate-100" : ""}`}
+                        className={`border-b border-stone-200 cursor-pointer ${index === 0 ? "bg-emerald-50" : ""} ${selectedBoardPlayerId === row.playerId ? "bg-stone-100" : "hover:bg-stone-50"}`}
                         onClick={() => setSelectedBoardPlayerId(row.playerId)}
                       >
-                        <td className="py-2">{row.position || "—"}</td>
-                        <td className="py-2 font-medium">{row.playerName}</td>
-                        <td className="py-2">{row.country || "—"}</td>
-                        <td className={`py-2 ${row.toPar < 0 ? "text-green-600 font-semibold" : row.toPar > 0 ? "text-red-600 font-semibold" : "font-semibold"}`}>
+                        <td className="py-3 font-semibold tabular-nums">{row.position || "—"}</td>
+                        <td className="py-3 font-semibold text-stone-900">{row.playerName}</td>
+                        <td className="py-3">{row.country || "—"}</td>
+                        <td className={`py-3 text-xl md:text-2xl tabular-nums ${row.toPar < 0 ? "text-green-700 font-bold" : row.toPar > 0 ? "text-red-700 font-bold" : "font-bold text-stone-700"}`}>
                           {formatScore(row.toPar)}
                         </td>
-                        <td className="py-2">{Number.isFinite(row.totalScore) ? row.totalScore : "—"}</td>
+                        <td className="py-3 tabular-nums">{Number.isFinite(row.totalScore) ? row.totalScore : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -621,17 +683,16 @@ export default function SharedPgaPoolApp() {
         <div className="grid gap-4">
           <div className={panelClass}>
             <div className="p-4">
-              <div className="text-lg font-semibold mb-3">Pool Leaderboard</div>
-              {hasPoolContext && hasDraftedPlayers && <div className="text-xs text-slate-500 mb-2">This is the screen your group will care about most after drafting.</div>}
-              <div className="grid gap-2">
-                {poolLeaderboard.length === 0 ? (
-                  <div className="text-sm text-slate-500">No picks yet.</div>
-                ) : (
-                  poolLeaderboard.map((entry, index) => (
-                    <div key={entry.userName} className={`border rounded-2xl p-3 ${index === 0 ? "bg-green-50" : ""}`}>
+              <div className="text-lg md:text-xl font-semibold mb-3 text-stone-900">Pool Leaderboard</div>
+              {poolLeaderboard.length === 0 ? (
+                <div className="text-sm text-stone-500">No picks yet.</div>
+              ) : (
+                <div className="grid gap-2">
+                  {poolLeaderboard.map((entry, index) => (
+                    <div key={entry.userName} className={`border rounded-2xl p-3 ${index === 0 ? "bg-emerald-50 border-emerald-300" : "bg-white"}`}>
                       <div className="flex items-center justify-between">
                         <div className="font-medium">{entry.userName}</div>
-                        <div className={entry.total < 0 ? "text-green-600 font-semibold" : entry.total > 0 ? "text-red-600 font-semibold" : "font-semibold"}>
+                        <div className={entry.total < 0 ? "text-green-700 text-xl font-bold tabular-nums" : entry.total > 0 ? "text-red-700 text-xl font-bold tabular-nums" : "text-xl font-bold text-stone-700 tabular-nums"}>
                           {formatScore(entry.total)}
                         </div>
                       </div>
@@ -644,50 +705,30 @@ export default function SharedPgaPoolApp() {
                         ))}
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className={panelClass}>
-            <div className="p-4">
-              <div className="text-lg font-semibold mb-3">Selected Golfer Details</div>
-              <div className="text-xs text-slate-500 mb-2">Tap any golfer in the full leaderboard to inspect all available live result fields from your BallDontLie account.</div>
-              {selectedBoardPlayer ? (
-                <div className="grid gap-2 text-sm">
-                  <div><span className="font-medium">Player:</span> {selectedBoardPlayer.playerName}</div>
-                  <div><span className="font-medium">Position:</span> {selectedBoardPlayer.position || "—"}</div>
-                  <div><span className="font-medium">To Par:</span> {formatScore(selectedBoardPlayer.toPar)}</div>
-                  <div><span className="font-medium">Total Score:</span> {selectedBoardPlayer.totalScore}</div>
-                  <div><span className="font-medium">Country:</span> {selectedBoardPlayer.country || "—"}</div>
-                  <div><span className="font-medium">Earnings:</span> {selectedBoardPlayer.earnings ?? "—"}</div>
-                  <pre className="mt-2 whitespace-pre-wrap text-xs bg-slate-50 border rounded-2xl p-3 overflow-x-auto">{JSON.stringify(selectedBoardPlayer.raw, null, 2)}</pre>
+                  ))}
                 </div>
-              ) : (
-                <div className="text-sm text-slate-500">Select a golfer from the leaderboard.</div>
               )}
             </div>
           </div>
 
           <div className={panelClass}>
             <div className="p-4">
-              <div className="text-lg font-semibold mb-3">Pool Members</div>
-              <div className="grid gap-2">
-                {members.length === 0 ? (
-                  <div className="text-sm text-slate-500">No members yet.</div>
-                ) : (
-                  members.map((member) => (
+              <div className="text-lg md:text-xl font-semibold mb-3 text-stone-900">Pool Members</div>
+              {members.length === 0 ? (
+                <div className="text-sm text-stone-500">No members yet.</div>
+              ) : (
+                <div className="grid gap-2">
+                  {members.map((member) => (
                     <div key={member.id} className="flex items-center justify-between border rounded-2xl p-3">
                       <div>
                         <div className="font-medium">{member.userName}</div>
-                        <div className="text-xs text-slate-500">{member.email || member.userId}</div>
+                        <div className="text-xs text-stone-500">{member.email || member.userId}</div>
                       </div>
-                      <div className="text-sm text-slate-500">{member.role}</div>
+                      <div className="text-sm text-stone-500">{member.role}</div>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
