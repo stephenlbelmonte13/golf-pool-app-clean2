@@ -487,7 +487,7 @@ const isMakingCut = (score) => {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-6">
         <div className="rounded-[20px] bg-[#16321f] text-white p-4 shadow-sm">
           <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">Tournament Leader</div>
           <div className="mt-2 text-xl font-bold truncate">{tournamentLeader?.playerName || "—"}</div>
