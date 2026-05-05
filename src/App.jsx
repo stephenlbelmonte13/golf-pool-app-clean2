@@ -423,6 +423,25 @@ export default function SharedPgaPoolApp() {
   const selectedBoardPlayer = selectedBoardPlayerId ? liveBoard[selectedBoardPlayerId] : null;
   const tournamentLeader = leaderboardRows[0] || null;
   const poolLeader = poolLeaderboard[0] || null;
+  const roundStatus = selectedTournament
+  ? `${selectedTournament.status || "Tournament"}`
+  : "No tournament selected";
+
+const cutLine = useMemo(() => {
+  if (!leaderboardRows.length) return null;
+
+  const sortedScores = leaderboardRows
+    .map((row) => row.toPar)
+    .filter((score) => Number.isFinite(score))
+    .sort((a, b) => a - b);
+
+  return sortedScores.length >= 65 ? sortedScores[64] : sortedScores[sortedScores.length - 1];
+}, [leaderboardRows]);
+
+const isMakingCut = (score) => {
+  if (cutLine === null || score === null || score === undefined) return null;
+  return score <= cutLine;
+};
   const pickedCount = picks.filter((pick) => pick.tournamentId === selectedTournamentId).length;
   const totalPossiblePicks = Math.max(members.length, 1) * PICKS_PER_USER;
 
