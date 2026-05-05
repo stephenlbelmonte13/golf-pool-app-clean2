@@ -487,32 +487,50 @@ const isMakingCut = (score) => {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-6">
-        <div className="rounded-[20px] bg-[#16321f] text-white p-4 shadow-sm">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">Tournament Leader</div>
-          <div className="mt-2 text-xl font-bold truncate">{tournamentLeader?.playerName || "—"}</div>
-          <div className="text-3xl font-bold tabular-nums">{tournamentLeader ? formatScore(tournamentLeader.toPar) : "—"}</div>
-        </div>
-        <div className="rounded-[20px] bg-white border border-stone-300 p-4 shadow-sm">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-stone-500">Pool Leader</div>
-          <div className="mt-2 text-xl font-bold truncate">{poolLeader?.userName || "—"}</div>
-          <div className={`text-3xl font-bold tabular-nums ${poolLeader?.total < 0 ? "text-green-700" : poolLeader?.total > 0 ? "text-red-700" : "text-stone-700"}`}>
-            {poolLeader ? formatScore(poolLeader.total) : "—"}
-          </div>
-        </div>
-        <div className="rounded-[20px] bg-white border border-stone-300 p-4 shadow-sm">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-stone-500">Draft Status</div>
-          <div className={`mt-2 text-2xl font-bold ${draftOpen ? "text-green-700" : "text-red-700"}`}>
-            {draftOpen ? "OPEN" : "LOCKED"}
-          </div>
-          <div className="text-sm text-stone-500">{pickedCount}/{totalPossiblePicks} picks made</div>
-        </div>
-        <div className="rounded-[20px] bg-white border border-stone-300 p-4 shadow-sm">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-stone-500">Updated</div>
-          <div className="mt-2 text-2xl font-bold tabular-nums">{formatUpdated(lastUpdated)}</div>
-          <div className="text-sm text-stone-500">Auto-refresh every 30 sec</div>
-        </div>
+<div className="rounded-[24px] bg-[#071b11] text-white shadow-sm border border-stone-800 overflow-hidden">
+  <div className="px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2 border-b border-white/10">
+    <div className="flex items-center gap-3">
+      <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse"></span>
+      <span className="text-[11px] uppercase tracking-[0.25em] text-emerald-200">Live</span>
+      <span className="text-sm text-white/80">{selectedTournament?.name || "Select a tournament"}</span>
+    </div>
+    <div className="text-sm text-white/70">Updated {formatUpdated(lastUpdated)} · Auto-refresh 30s</div>
+  </div>
+
+  <div className="grid gap-0 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/10">
+    <div className="p-4">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">Tournament Leader</div>
+      <div className="mt-2 text-2xl font-bold truncate">{tournamentLeader?.playerName || "—"}</div>
+      <div className="mt-1 text-4xl font-black tabular-nums text-white">
+        {tournamentLeader ? formatScore(tournamentLeader.toPar) : "—"}
       </div>
+    </div>
+
+    <div className="p-4 bg-white/5">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">Projected Cut</div>
+      <div className="mt-2 text-4xl font-black tabular-nums text-white">
+        {cutLine === null ? "—" : formatScore(cutLine)}
+      </div>
+      <div className="text-sm text-white/70">Top 65 estimate</div>
+    </div>
+
+    <div className="p-4">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">Pool Leader</div>
+      <div className="mt-2 text-2xl font-bold truncate">{poolLeader?.userName || "—"}</div>
+      <div className={`mt-1 text-4xl font-black tabular-nums ${poolLeader?.total < 0 ? "text-emerald-300" : poolLeader?.total > 0 ? "text-red-300" : "text-white"}`}>
+        {poolLeader ? formatScore(poolLeader.total) : "—"}
+      </div>
+    </div>
+  </div>
+
+  <div className="px-4 py-2 flex flex-wrap items-center justify-between gap-2 bg-black/20 text-xs text-white/70">
+    <span>
+      Draft: <span className={draftOpen ? "text-emerald-300 font-semibold" : "text-red-300 font-semibold"}>{draftOpen ? "OPEN" : "LOCKED"}</span>
+    </span>
+    <span>{pickedCount}/{totalPossiblePicks} picks made</span>
+    <span>{selectedTournament?.status || "Tournament status unavailable"}</span>
+  </div>
+</div>
 
       <div className={panelClass}>
         <div className="p-4 grid gap-3 lg:grid-cols-[auto_1fr_auto_auto]">
