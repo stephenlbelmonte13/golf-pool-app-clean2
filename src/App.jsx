@@ -57,6 +57,7 @@ export default function SharedPgaPoolApp() {
   const [search, setSearch] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [viewMode, setViewMode] = useState("pool");
+  const [nickname, setNickname] = useState("");
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -335,14 +336,14 @@ export default function SharedPgaPoolApp() {
       currentPickStartedAtMillis: Date.now(),
     });
   };
-
+const displayName = nickname.trim() || user?.displayName || user?.email || "Player";
   const createPool = async () => {
     if (!user) return;
     const code = Math.random().toString(36).substring(2, 7).toUpperCase();
     await setDoc(doc(db, "pools", code), {
       code,
       commissionerId: user.uid,
-      commissionerName: user.displayName || user.email,
+      commissionerName: displayName,
       picksPerUser: PICKS_PER_USER,
       tournamentId: selectedTournamentId || "",
       draftOpen: true,
@@ -354,7 +355,7 @@ export default function SharedPgaPoolApp() {
     });
     await setDoc(doc(db, "pools", code, "members", user.uid), {
       userId: user.uid,
-      userName: user.displayName || user.email,
+      userName: displayName,
       email: user.email || "",
       joinedAt: serverTimestamp(),
       role: "commissioner",
@@ -375,7 +376,7 @@ export default function SharedPgaPoolApp() {
       doc(db, "pools", code, "members", user.uid),
       {
         userId: user.uid,
-        userName: user.displayName || user.email,
+        userName: displayName,
         email: user.email || "",
         joinedAt: serverTimestamp(),
         role: "member",
@@ -419,7 +420,7 @@ export default function SharedPgaPoolApp() {
       pool: activePoolCode,
       tournamentId: selectedTournamentId,
       userId: user.uid,
-      userName: user.displayName || user.email,
+      userName: displayName,
       playerId: selectedPlayer.id,
       golfer: selectedPlayer.name,
       createdAt: serverTimestamp(),
@@ -600,8 +601,14 @@ export default function SharedPgaPoolApp() {
       </div>
 
       <div className={panelClass}>
-        <div className="p-4 grid gap-3 lg:grid-cols-[auto_1fr_auto_auto]">
-          <button onClick={createPool} disabled={!user} className={buttonClass}>Create Pool</button>
+  <div className="p-4 grid gap-3 lg:grid-cols-[1fr_auto_1fr_auto_auto]">
+    <input
+      className="border rounded-2xl p-2 w-full"
+      placeholder="Nickname"
+      value={nickname}
+      onChange={(e) => setNickname(e.target.value)}
+    />
+    <button onClick={createPool} disabled={!user} className={buttonClass}>Create Pool</button>
           <input
             className="border rounded-2xl p-2 w-full"
             placeholder="Enter Pool Code"
