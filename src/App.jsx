@@ -57,10 +57,16 @@ export default function SharedPgaPoolApp() {
   const [search, setSearch] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [viewMode, setViewMode] = useState("pool");
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (nextUser) => setUser(nextUser));
     return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -267,6 +273,15 @@ export default function SharedPgaPoolApp() {
 
   const isCommissioner = Boolean(user && poolSettings && user.uid === poolSettings.commissionerId);
   const draftOpen = poolSettings?.draftOpen ?? true;
+  const draftOrder = poolSettings?.draftOrder || [];
+  const currentPickIndex = poolSettings?.currentPickIndex ?? 0;
+  const draftSeconds = poolSettings?.draftSeconds ?? 60;
+  const currentDrafterId = draftOrder.length ? draftOrder[currentPickIndex % draftOrder.length] : "";
+  const currentDrafter = members.find((member) => member.userId === currentDrafterId || member.id === currentDrafterId) || null;
+  const pickStartedAtMillis = poolSettings?.currentPickStartedAtMillis || Date.now();
+  const elapsedSeconds = Math.max(0, Math.floor((now - pickStartedAtMillis) / 1000));
+  const remainingSeconds = Math.max(0, draftSeconds - elapsedSeconds);
+  const currentRound = draftOrder.length ? Math.floor(currentPickIndex / draftOrder.length) + 1 : 1;
 
   const openDraft = async () => {
     if (!isCommissioner || !activePoolCode) return;
@@ -276,6 +291,49 @@ export default function SharedPgaPoolApp() {
   const closeDraft = async () => {
     if (!isCommissioner || !activePoolCode) return;
     await updateDoc(doc(db, "pools", activePoolCode), { draftOpen: false });
+  };
+
+  const setDraftOrderFromMembers = async () => {
+    if (!isCommissioner || !activePoolCode || members.length === 0) return;
+    const order = [...members]
+      .sort((a, b) => (a.userName || "").localeCompare(b.userName || ""))
+      .map((member) => member.userId || member.id);
+    await updateDoc(doc(db, "pools", activePoolCode), {
+      draftOrder: order,
+      currentPickIndex: 0,
+      currentPickStartedAtMillis: Date.now(),
+      draftOpen: true,
+    });
+  };
+
+  const shuffleDraftOrder = async () => {
+    if (!isCommissioner || !activePoolCode || members.length === 0) return;
+    const order = members.map((member) => member.userId || member.id);
+    for (let i = order.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    await updateDoc(doc(db, "pools", activePoolCode), {
+      draftOrder: order,
+      currentPickIndex: 0,
+      currentPickStartedAtMillis: Date.now(),
+      draftOpen: true,
+    });
+  };
+
+  const nextPick = async () => {
+    if (!isCommissioner || !activePoolCode || draftOrder.length === 0) return;
+    await updateDoc(doc(db, "pools", activePoolCode), {
+      currentPickIndex: currentPickIndex + 1,
+      currentPickStartedAtMillis: Date.now(),
+    });
+  };
+
+  const resetDraftClock = async () => {
+    if (!isCommissioner || !activePoolCode) return;
+    await updateDoc(doc(db, "pools", activePoolCode), {
+      currentPickStartedAtMillis: Date.now(),
+    });
   };
 
   const createPool = async () => {
@@ -288,6 +346,10 @@ export default function SharedPgaPoolApp() {
       picksPerUser: PICKS_PER_USER,
       tournamentId: selectedTournamentId || "",
       draftOpen: true,
+      draftOrder: [],
+      currentPickIndex: 0,
+      draftSeconds: 60,
+      currentPickStartedAtMillis: Date.now(),
       createdAt: serverTimestamp(),
     });
     await setDoc(doc(db, "pools", code, "members", user.uid), {
@@ -349,6 +411,7 @@ export default function SharedPgaPoolApp() {
 
   const addPick = async () => {
     if (!user || !activePoolCode || !selectedTournamentId || !selectedPlayer || !draftOpen) return;
+    if (draftOrder.length && user.uid !== currentDrafterId) return;
     if (myPicks.length >= PICKS_PER_USER) return;
     if (takenPlayerIds.has(selectedPlayer.id)) return;
 
@@ -399,6 +462,15 @@ export default function SharedPgaPoolApp() {
       });
   }, [liveBoard, search]);
 
+  const cutLine = useMemo(() => {
+    if (!leaderboardRows.length) return null;
+    const sortedScores = leaderboardRows
+      .map((row) => row.toPar)
+      .filter((score) => Number.isFinite(score))
+      .sort((a, b) => a - b);
+    return sortedScores.length >= 65 ? sortedScores[64] : sortedScores[sortedScores.length - 1] ?? null;
+  }, [leaderboardRows]);
+
   const poolLeaderboard = useMemo(() => {
     const totals = {};
     picks
@@ -423,27 +495,11 @@ export default function SharedPgaPoolApp() {
   const selectedBoardPlayer = selectedBoardPlayerId ? liveBoard[selectedBoardPlayerId] : null;
   const tournamentLeader = leaderboardRows[0] || null;
   const poolLeader = poolLeaderboard[0] || null;
-  const roundStatus = selectedTournament
-  ? `${selectedTournament.status || "Tournament"}`
-  : "No tournament selected";
-
-const cutLine = useMemo(() => {
-  if (!leaderboardRows.length) return null;
-
-  const sortedScores = leaderboardRows
-    .map((row) => row.toPar)
-    .filter((score) => Number.isFinite(score))
-    .sort((a, b) => a - b);
-
-  return sortedScores.length >= 65 ? sortedScores[64] : sortedScores[sortedScores.length - 1];
-}, [leaderboardRows]);
-
-const isMakingCut = (score) => {
-  if (cutLine === null || score === null || score === undefined) return null;
-  return score <= cutLine;
-};
   const pickedCount = picks.filter((pick) => pick.tournamentId === selectedTournamentId).length;
   const totalPossiblePicks = Math.max(members.length, 1) * PICKS_PER_USER;
+  const userCanPick =
+    Boolean(user && activePoolCode && draftOpen) &&
+    (!draftOrder.length || user.uid === currentDrafterId);
 
   const formatScore = (value) => {
     if (value === null || value === undefined) return "—";
@@ -456,6 +512,16 @@ const isMakingCut = (score) => {
     return value.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
   };
 
+  const cutBadgeClass = (score) => {
+    if (cutLine === null || score === null || score === undefined) return "bg-stone-100 text-stone-500";
+    return score <= cutLine ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800";
+  };
+
+  const getCutStatus = (score) => {
+    if (cutLine === null || score === null || score === undefined) return "—";
+    return score <= cutLine ? "Making" : "Missing";
+  };
+
   const hasPoolContext = Boolean(activePoolCode);
   const hasDraftedPlayers = draftedLiveRows.length > 0;
 
@@ -465,7 +531,7 @@ const isMakingCut = (score) => {
         <div className="p-4 md:p-6 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
             <div className="text-[11px] uppercase tracking-[0.35em] text-emerald-200">Live Coverage</div>
-            <h1 className="text-3xl md:text-5xl font-semibold tracking-tight mt-2">Longwoods Ball Crusher</h1>
+            <h1 className="text-3xl md:text-5xl font-semibold tracking-tight mt-2">Shared PGA Pool Tracker</h1>
             <p className="text-sm md:text-base text-emerald-100/80 mt-2 max-w-2xl">
               Broadcast-style live leaderboard, pre-tournament draft room, and shared mobile scoring.
             </p>
@@ -487,50 +553,51 @@ const isMakingCut = (score) => {
         </div>
       </div>
 
-<div className="rounded-[24px] bg-[#071b11] text-white shadow-sm border border-stone-800 overflow-hidden">
-  <div className="px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2 border-b border-white/10">
-    <div className="flex items-center gap-3">
-      <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse"></span>
-      <span className="text-[11px] uppercase tracking-[0.25em] text-emerald-200">Live</span>
-      <span className="text-sm text-white/80">{selectedTournament?.name || "Select a tournament"}</span>
-    </div>
-    <div className="text-sm text-white/70">Updated {formatUpdated(lastUpdated)} · Auto-refresh 30s</div>
-  </div>
+      <div className="rounded-[24px] bg-[#071b11] text-white shadow-sm border border-stone-800 overflow-hidden">
+        <div className="px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse"></span>
+            <span className="text-[11px] uppercase tracking-[0.25em] text-emerald-200">Live</span>
+            <span className="text-sm text-white/80">{selectedTournament?.name || "Select a tournament"}</span>
+          </div>
+          <div className="text-sm text-white/70">Updated {formatUpdated(lastUpdated)} · Auto-refresh 30s</div>
+        </div>
 
-  <div className="grid gap-0 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/10">
-    <div className="p-4">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">Tournament Leader</div>
-      <div className="mt-2 text-2xl font-bold truncate">{tournamentLeader?.playerName || "—"}</div>
-      <div className="mt-1 text-4xl font-black tabular-nums text-white">
-        {tournamentLeader ? formatScore(tournamentLeader.toPar) : "—"}
+        <div className="grid gap-0 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/10">
+          <div className="p-4">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">Tournament Leader</div>
+            <div className="mt-2 text-2xl font-bold truncate">{tournamentLeader?.playerName || "—"}</div>
+            <div className="mt-1 text-4xl font-black tabular-nums text-white">
+              {tournamentLeader ? formatScore(tournamentLeader.toPar) : "—"}
+            </div>
+          </div>
+
+          <div className="p-4 bg-white/5">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">Projected Cut</div>
+            <div className="mt-2 text-4xl font-black tabular-nums text-white">
+              {cutLine === null ? "—" : formatScore(cutLine)}
+            </div>
+            <div className="text-sm text-white/70">Top 65 estimate</div>
+          </div>
+
+          <div className="p-4">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">Pool Leader</div>
+            <div className="mt-2 text-2xl font-bold truncate">{poolLeader?.userName || "—"}</div>
+            <div className={`mt-1 text-4xl font-black tabular-nums ${poolLeader?.total < 0 ? "text-emerald-300" : poolLeader?.total > 0 ? "text-red-300" : "text-white"}`}>
+              {poolLeader ? formatScore(poolLeader.total) : "—"}
+            </div>
+          </div>
+        </div>
+
+        <div className="px-4 py-2 flex flex-wrap items-center justify-between gap-2 bg-black/20 text-xs text-white/70">
+          <span>
+            Draft: <span className={draftOpen ? "text-emerald-300 font-semibold" : "text-red-300 font-semibold"}>{draftOpen ? "OPEN" : "LOCKED"}</span>
+          </span>
+          <span>On clock: <span className="font-semibold text-white">{currentDrafter?.userName || "Set order"}</span></span>
+          <span>{pickedCount}/{totalPossiblePicks} picks made</span>
+          <span>{selectedTournament?.status || "Tournament status unavailable"}</span>
+        </div>
       </div>
-    </div>
-
-    <div className="p-4 bg-white/5">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">Projected Cut</div>
-      <div className="mt-2 text-4xl font-black tabular-nums text-white">
-        {cutLine === null ? "—" : formatScore(cutLine)}
-      </div>
-      <div className="text-sm text-white/70">Top 65 estimate</div>
-    </div>
-
-    <div className="p-4">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-200">Pool Leader</div>
-      <div className="mt-2 text-2xl font-bold truncate">{poolLeader?.userName || "—"}</div>
-      <div className={`mt-1 text-4xl font-black tabular-nums ${poolLeader?.total < 0 ? "text-emerald-300" : poolLeader?.total > 0 ? "text-red-300" : "text-white"}`}>
-        {poolLeader ? formatScore(poolLeader.total) : "—"}
-      </div>
-    </div>
-  </div>
-
-  <div className="px-4 py-2 flex flex-wrap items-center justify-between gap-2 bg-black/20 text-xs text-white/70">
-    <span>
-      Draft: <span className={draftOpen ? "text-emerald-300 font-semibold" : "text-red-300 font-semibold"}>{draftOpen ? "OPEN" : "LOCKED"}</span>
-    </span>
-    <span>{pickedCount}/{totalPossiblePicks} picks made</span>
-    <span>{selectedTournament?.status || "Tournament status unavailable"}</span>
-  </div>
-</div>
 
       <div className={panelClass}>
         <div className="p-4 grid gap-3 lg:grid-cols-[auto_1fr_auto_auto]">
@@ -578,10 +645,27 @@ const isMakingCut = (score) => {
               </div>
             </div>
 
+            <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-stone-500">On The Clock</div>
+              <div className="mt-1 text-xl font-bold text-stone-900">{currentDrafter?.userName || "Commissioner: set draft order"}</div>
+              <div className={`mt-1 text-3xl font-black tabular-nums ${remainingSeconds <= 10 ? "text-red-700" : "text-emerald-700"}`}>
+                {String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:{String(remainingSeconds % 60).padStart(2, "0")}
+              </div>
+              {draftOrder.length > 0 && (
+                <div className="mt-2 text-xs text-stone-500">
+                  Order: {draftOrder.map((id) => members.find((m) => m.userId === id || m.id === id)?.userName || "Unknown").join(" → ")}
+                </div>
+              )}
+            </div>
+
             {isCommissioner && (
-              <div className="flex gap-2">
+              <div className="grid gap-2 md:grid-cols-2">
+                <button onClick={setDraftOrderFromMembers} disabled={!members.length} className={outlineButtonClass}>Set Order A–Z</button>
+                <button onClick={shuffleDraftOrder} disabled={!members.length} className={outlineButtonClass}>Randomize Order</button>
                 <button onClick={openDraft} disabled={draftOpen} className={outlineButtonClass}>Open Draft</button>
                 <button onClick={closeDraft} disabled={!draftOpen} className={outlineButtonClass}>Lock Draft</button>
+                <button onClick={nextPick} disabled={!draftOrder.length} className={outlineButtonClass}>Next Pick</button>
+                <button onClick={resetDraftClock} disabled={!activePoolCode} className={outlineButtonClass}>Reset Clock</button>
               </div>
             )}
 
@@ -589,9 +673,9 @@ const isMakingCut = (score) => {
               className="border rounded-2xl p-2"
               value={selectedPlayerId}
               onChange={(e) => setSelectedPlayerId(e.target.value)}
-              disabled={!user || !activePoolCode || !draftOpen || loadingField || !fieldPlayers.length || myPicks.length >= PICKS_PER_USER}
+              disabled={!userCanPick || loadingField || !fieldPlayers.length || myPicks.length >= PICKS_PER_USER}
             >
-              <option value="">{loadingField ? "Loading tournament field..." : "Select golfer"}</option>
+              <option value="">{loadingField ? "Loading tournament field..." : userCanPick ? "Select golfer" : "Waiting for your turn"}</option>
               {fieldPlayers.map((player) => (
                 <option key={player.id} value={player.id} disabled={takenPlayerIds.has(player.id)}>
                   {player.name}{takenPlayerIds.has(player.id) ? " — taken" : ""}
@@ -601,7 +685,7 @@ const isMakingCut = (score) => {
 
             <button
               onClick={addPick}
-              disabled={!user || !activePoolCode || !draftOpen || !selectedPlayerId || myPicks.length >= PICKS_PER_USER}
+              disabled={!userCanPick || !selectedPlayerId || myPicks.length >= PICKS_PER_USER}
               className={buttonClass}
             >
               Add Pick
@@ -662,6 +746,7 @@ const isMakingCut = (score) => {
                         <th className="text-left py-2">Pos</th>
                         <th className="text-left py-2">To Par</th>
                         <th className="text-left py-2">Total</th>
+                        <th className="text-left py-2">Cut</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -692,6 +777,7 @@ const isMakingCut = (score) => {
                       <th className="text-left py-2">Country</th>
                       <th className="text-left py-2">To Par</th>
                       <th className="text-left py-2">Total</th>
+                      <th className="text-left py-2">Cut</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -708,6 +794,11 @@ const isMakingCut = (score) => {
                           {formatScore(row.toPar)}
                         </td>
                         <td className="py-3 tabular-nums">{Number.isFinite(row.totalScore) ? row.totalScore : "—"}</td>
+                        <td className="py-3">
+                          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${cutBadgeClass(row.toPar)}`}>
+                            {getCutStatus(row.toPar)}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
