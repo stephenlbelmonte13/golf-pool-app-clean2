@@ -201,42 +201,56 @@ const [assignedPlayerId, setAssignedPlayerId] = useState("");
     if (!selectedTournamentId) return;
 
     const fetchLiveLeaderboard = async () => {
-      try {
-        setLoadingScores(true);
-        setError("");
-        const data = await apiFetch(
-          `/tournament_results?tournament_ids[]=${selectedTournamentId}&per_page=100`
-        );
+  try {
+    setLoadingScores(true);
+    setError("");
 
-        const board = {};
-        (data.data || []).forEach((result) => {
-          const playerId = String(result.player.id);
-          board[playerId] = {
-            playerId,
-            playerName: result.player.display_name,
-            position: result.position,
-            positionNumeric: result.position_numeric,
-            toPar: Number(result.par_relative_score ?? 0),
-            totalScore: Number(result.total_score ?? 0),
-            earnings: result.earnings ?? null,
-            country: result.player.country || "",
-            raw: result,
-          };
-        });
+    let cursor = null;
+    let keepGoing = true;
+    let allResults = [];
 
-        setLiveBoard(board);
-        setLastUpdated(new Date());
-        if (!selectedBoardPlayerId && Object.keys(board).length) {
-          setSelectedBoardPlayerId(Object.keys(board)[0]);
-        }
-      } catch (err) {
-        console.error("Live scoring error:", err);
-        setLiveBoard({});
-        setError(`Could not load live scoring: ${err.message}`);
-      } finally {
-        setLoadingScores(false);
-      }
-    };
+    while (keepGoing) {
+      const cursorParam = cursor ? `&cursor=${cursor}` : "";
+      const data = await apiFetch(
+        `/tournament_results?tournament_ids[]=${selectedTournamentId}&per_page=100${cursorParam}`
+      );
+
+      allResults = [...allResults, ...(data.data || [])];
+
+      cursor = data.meta?.next_cursor ?? null;
+      keepGoing = Boolean(cursor);
+    }
+
+    const board = {};
+    allResults.forEach((result) => {
+      const playerId = String(result.player.id);
+      board[playerId] = {
+        playerId,
+        playerName: result.player.display_name,
+        position: result.position,
+        positionNumeric: result.position_numeric,
+        toPar: Number(result.par_relative_score ?? 0),
+        totalScore: Number(result.total_score ?? 0),
+        earnings: result.earnings ?? null,
+        country: result.player.country || "",
+        raw: result,
+      };
+    });
+
+    setLiveBoard(board);
+    setLastUpdated(new Date());
+
+    if (!selectedBoardPlayerId && Object.keys(board).length) {
+      setSelectedBoardPlayerId(Object.keys(board)[0]);
+    }
+  } catch (err) {
+    console.error("Live scoring error:", err);
+    setLiveBoard({});
+    setError(`Could not load live scoring: ${err.message}`);
+  } finally {
+    setLoadingScores(false);
+  }
+};
 
     fetchLiveLeaderboard();
     const interval = setInterval(fetchLiveLeaderboard, 30000);
