@@ -47,6 +47,8 @@ export default function SharedPgaPoolApp() {
   const [selectedTournamentId, setSelectedTournamentId] = useState("");
   const [fieldPlayers, setFieldPlayers] = useState([]);
   const [selectedPlayerId, setSelectedPlayerId] = useState("");
+  const [assignedMemberId, setAssignedMemberId] = useState("");
+const [assignedPlayerId, setAssignedPlayerId] = useState("");
   const [liveBoard, setLiveBoard] = useState({});
   const [selectedBoardPlayerId, setSelectedBoardPlayerId] = useState("");
   const [loadingTournaments, setLoadingTournaments] = useState(false);
@@ -460,7 +462,33 @@ const displayName = nickname.trim() || user?.displayName || user?.email || "Play
     });
     setSelectedPlayerId("");
   };
+const assignPickToMember = async () => {
+  if (!isCommissioner || !activePoolCode || !selectedTournamentId || !assignedMemberId || !assignedPlayerId) return;
 
+  const member = members.find((m) => m.userId === assignedMemberId || m.id === assignedMemberId);
+  const player = fieldPlayers.find((p) => p.id === assignedPlayerId);
+
+  if (!member || !player) return;
+  if (takenPlayerIds.has(player.id)) {
+    setError("That golfer has already been assigned or drafted.");
+    return;
+  }
+
+  await addDoc(collection(db, "picks"), {
+    pool: activePoolCode,
+    tournamentId: selectedTournamentId,
+    userId: member.userId || member.id,
+    userName: member.userName,
+    playerId: player.id,
+    golfer: player.name,
+    assignedByCommissioner: true,
+    createdAt: serverTimestamp(),
+  });
+
+  setAssignedMemberId("");
+  setAssignedPlayerId("");
+  setError("");
+};
   const selectedTournament = useMemo(
     () => tournaments.find((t) => t.id === selectedTournamentId) || null,
     [tournaments, selectedTournamentId]
@@ -754,6 +782,64 @@ const displayName = nickname.trim() || user?.displayName || user?.email || "Play
             >
               Add Pick
             </button>
+            {isCommissioner && (
+  <div className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 p-3 grid gap-2">
+    <div className="text-lg font-semibold text-stone-900">
+      Commissioner Assign Pick
+    </div>
+
+    <select
+      className="border rounded-2xl p-2"
+      value={assignedMemberId}
+      onChange={(e) => setAssignedMemberId(e.target.value)}
+    >
+      <option value="">Select pool member</option>
+
+      {members.map((member) => (
+        <option
+          key={member.id}
+          value={member.userId || member.id}
+        >
+          {member.userName}
+        </option>
+      ))}
+    </select>
+
+    <select
+      className="border rounded-2xl p-2"
+      value={assignedPlayerId}
+      onChange={(e) => setAssignedPlayerId(e.target.value)}
+      disabled={loadingField || !fieldPlayers.length}
+    >
+      <option value="">
+        {loadingField ? "Loading golfers..." : "Select golfer to assign"}
+      </option>
+
+      {fieldPlayers.map((player) => (
+        <option
+          key={player.id}
+          value={player.id}
+          disabled={takenPlayerIds.has(player.id)}
+        >
+          {player.name}
+          {takenPlayerIds.has(player.id) ? " — taken" : ""}
+        </option>
+      ))}
+    </select>
+
+    <button
+      onClick={assignPickToMember}
+      disabled={!assignedMemberId || !assignedPlayerId}
+      className={buttonClass}
+    >
+      Assign Golfer
+    </button>
+
+    <div className="text-xs text-stone-500">
+      Commissioner can manually assign golfers without using the draft order.
+    </div>
+  </div>
+)}
           </div>
         </div>
       </div>
