@@ -699,15 +699,39 @@ const displayName = nickname.trim() || user?.displayName || user?.email || "Play
             </div>
 
             {isCommissioner && (
-              <div className="grid gap-2 md:grid-cols-2">
-                <button onClick={setDraftOrderFromMembers} disabled={!members.length} className={outlineButtonClass}>Set Order A–Z</button>
-                <button onClick={shuffleDraftOrder} disabled={!members.length} className={outlineButtonClass}>Randomize Order</button>
-                <button onClick={openDraft} disabled={draftOpen} className={outlineButtonClass}>Open Draft</button>
-                <button onClick={closeDraft} disabled={!draftOpen} className={outlineButtonClass}>Lock Draft</button>
-                <button onClick={nextPick} disabled={!draftOrder.length} className={outlineButtonClass}>Next Pick</button>
-                <button onClick={resetDraftClock} disabled={!activePoolCode} className={outlineButtonClass}>Reset Clock</button>
-              </div>
-            )}
+  <div className="grid gap-2">
+    <div className="grid gap-2 md:grid-cols-2">
+      <button onClick={openDraft} disabled={draftOpen} className={outlineButtonClass}>
+        Open Draft
+      </button>
+
+      <button onClick={closeDraft} disabled={!draftOpen} className={outlineButtonClass}>
+        Lock Draft
+      </button>
+    </div>
+
+    <div className="grid gap-2">
+      <textarea
+        className="border rounded-2xl p-2 min-h-[120px]"
+        placeholder={"Manual draft order, one name per line\nExample:\nSteve\nMike\nChris\nDan"}
+        value={manualDraftOrderText}
+        onChange={(e) => setManualDraftOrderText(e.target.value)}
+      />
+
+      <button
+        onClick={setManualDraftOrder}
+        disabled={!manualDraftOrderText.trim()}
+        className={outlineButtonClass}
+      >
+        Set Manual Draft Order
+      </button>
+
+      <div className="text-xs text-stone-500">
+        Use exact nicknames from Pool Members, one per line.
+      </div>
+    </div>
+  </div>
+)}
 
             <select
               className="border rounded-2xl p-2"
