@@ -462,34 +462,47 @@ const displayName = nickname.trim() || user?.displayName || user?.email || "Play
     });
     setSelectedPlayerId("");
   };
+
 const assignPickToMember = async () => {
-  if (!isCommissioner || !activePoolCode || !selectedTournamentId || !assignedMemberId || !assignedPlayerId) return;
+  try {
+    if (!isCommissioner || !activePoolCode || !selectedTournamentId || !assignedMemberId || !assignedPlayerId) return;
 
-  const member = members.find((m) => m.userId === assignedMemberId || m.id === assignedMemberId);
-  const player = fieldPlayers.find((p) => p.id === assignedPlayerId);
+    const member = members.find((m) => m.userId === assignedMemberId || m.id === assignedMemberId);
+    const player = fieldPlayers.find((p) => p.id === assignedPlayerId);
 
-  if (!member || !player) return;
-  if (takenPlayerIds.has(player.id)) {
-    setError("That golfer has already been assigned or drafted.");
-    return;
+    if (!member || !player) return;
+
+    const alreadyTaken = picks.some(
+      (p) =>
+        p.pool === activePoolCode &&
+        p.tournamentId === selectedTournamentId &&
+        p.playerId === player.id
+    );
+
+    if (alreadyTaken) {
+      setError("That golfer has already been assigned or drafted in this pool.");
+      return;
+    }
+
+    await addDoc(collection(db, "picks"), {
+      pool: activePoolCode,
+      tournamentId: selectedTournamentId,
+      userId: member.userId || member.id,
+      userName: member.userName,
+      playerId: player.id,
+      golfer: player.name,
+      assignedByCommissioner: true,
+      createdAt: serverTimestamp(),
+    });
+
+    setAssignedMemberId("");
+    setAssignedPlayerId("");
+    setError("");
+  } catch (err) {
+    console.error("Commissioner assignment error:", err);
+    setError(`Could not assign golfer: ${err.message}`);
   }
-
-  await addDoc(collection(db, "picks"), {
-    pool: activePoolCode,
-    tournamentId: selectedTournamentId,
-    userId: member.userId || member.id,
-    userName: member.userName,
-    playerId: player.id,
-    golfer: player.name,
-    assignedByCommissioner: true,
-    createdAt: serverTimestamp(),
-  });
-
-  setAssignedMemberId("");
-  setAssignedPlayerId("");
-  setError("");
-};
-  const selectedTournament = useMemo(
+};  const selectedTournament = useMemo(
     () => tournaments.find((t) => t.id === selectedTournamentId) || null,
     [tournaments, selectedTournamentId]
   );
