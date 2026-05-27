@@ -295,7 +295,25 @@ const [assignedPlayerId, setAssignedPlayerId] = useState("");
   const draftOrder = poolSettings?.draftOrder || [];
   const currentPickIndex = poolSettings?.currentPickIndex ?? 0;
   const draftSeconds = poolSettings?.draftSeconds ?? 60;
-  const currentDrafterId = draftOrder.length ? draftOrder[currentPickIndex % draftOrder.length] : "";
+  const draftSize = draftOrder.length;
+
+const currentRound = draftSize
+  ? Math.floor(currentPickIndex / draftSize)
+  : 0;
+
+const pickWithinRound = draftSize
+  ? currentPickIndex % draftSize
+  : 0;
+
+const isSnakeReverse = currentRound % 2 === 1;
+
+const snakeIndex = isSnakeReverse
+  ? draftSize - 1 - pickWithinRound
+  : pickWithinRound;
+
+const currentDrafterId = draftSize
+  ? draftOrder[snakeIndex]
+  : "";
   const currentDrafter = members.find((member) => member.userId === currentDrafterId || member.id === currentDrafterId) || null;
   const pickStartedAtMillis = poolSettings?.currentPickStartedAtMillis || Date.now();
   const elapsedSeconds = Math.max(0, Math.floor((now - pickStartedAtMillis) / 1000));
