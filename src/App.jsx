@@ -60,6 +60,7 @@ const [assignedPlayerId, setAssignedPlayerId] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [viewMode, setViewMode] = useState("pool");
   const [manualDraftOrderText, setManualDraftOrderText] = useState("");
+  const [manualDraftOrderText, setManualDraftOrderText] = useState("");
   const [nickname, setNickname] = useState("");
   const [now, setNow] = useState(Date.now());
 
@@ -339,6 +340,39 @@ const [assignedPlayerId, setAssignedPlayerId] = useState("");
     });
   };
 const setManualDraftOrder = async () => {
+  if (!isCommissioner || !activePoolCode || !manualDraftOrderText.trim()) return;
+
+  const names = manualDraftOrderText
+    .split("\n")
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean);
+
+  const order = names
+    .map((name) => {
+      const match = members.find((member) =>
+        (member.userName || "").toLowerCase() === name ||
+        (member.email || "").toLowerCase() === name
+      );
+
+      return match ? match.userId || match.id : null;
+    })
+    .filter(Boolean);
+
+  if (order.length !== names.length) {
+    setError("Could not match every name. Use exact names shown in Pool Members.");
+    return;
+  }
+
+  await updateDoc(doc(db, "pools", activePoolCode), {
+    draftOrder: order,
+    currentPickIndex: 0,
+    currentPickStartedAtMillis: Date.now(),
+    draftOpen: true,
+  });
+
+  setError("");
+};
+  const setManualDraftOrder = async () => {
   if (!isCommissioner || !activePoolCode || !manualDraftOrderText.trim()) return;
 
   const names = manualDraftOrderText
