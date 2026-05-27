@@ -60,7 +60,6 @@ const [assignedPlayerId, setAssignedPlayerId] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [viewMode, setViewMode] = useState("pool");
   const [manualDraftOrderText, setManualDraftOrderText] = useState("");
-  const [manualDraftOrderText, setManualDraftOrderText] = useState("");
   const [nickname, setNickname] = useState("");
   const [now, setNow] = useState(Date.now());
 
@@ -318,7 +317,6 @@ const currentDrafterId = draftSize
   const pickStartedAtMillis = poolSettings?.currentPickStartedAtMillis || Date.now();
   const elapsedSeconds = Math.max(0, Math.floor((now - pickStartedAtMillis) / 1000));
   const remainingSeconds = Math.max(0, draftSeconds - elapsedSeconds);
-  const currentRound = draftOrder.length ? Math.floor(currentPickIndex / draftOrder.length) + 1 : 1;
 
   const openDraft = async () => {
     if (!isCommissioner || !activePoolCode) return;
@@ -358,39 +356,6 @@ const currentDrafterId = draftSize
     });
   };
 const setManualDraftOrder = async () => {
-  if (!isCommissioner || !activePoolCode || !manualDraftOrderText.trim()) return;
-
-  const names = manualDraftOrderText
-    .split("\n")
-    .map((name) => name.trim().toLowerCase())
-    .filter(Boolean);
-
-  const order = names
-    .map((name) => {
-      const match = members.find((member) =>
-        (member.userName || "").toLowerCase() === name ||
-        (member.email || "").toLowerCase() === name
-      );
-
-      return match ? match.userId || match.id : null;
-    })
-    .filter(Boolean);
-
-  if (order.length !== names.length) {
-    setError("Could not match every name. Use exact names shown in Pool Members.");
-    return;
-  }
-
-  await updateDoc(doc(db, "pools", activePoolCode), {
-    draftOrder: order,
-    currentPickIndex: 0,
-    currentPickStartedAtMillis: Date.now(),
-    draftOpen: true,
-  });
-
-  setError("");
-};
-  const setManualDraftOrder = async () => {
   if (!isCommissioner || !activePoolCode || !manualDraftOrderText.trim()) return;
 
   const names = manualDraftOrderText
