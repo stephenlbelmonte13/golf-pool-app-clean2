@@ -819,6 +819,26 @@ const assignPickToMember = async () => {
         Use exact nicknames from Pool Members, one per line.
       </div>
     </div>
+<div className="grid gap-2 w-full">
+  <textarea
+    className="border rounded-2xl p-2 min-h-[120px]"
+    placeholder={"Manual draft order, one name per line\nExample:\nSteve\nMike\nChris\nDan"}
+    value={manualDraftOrderText}
+    onChange={(e) => setManualDraftOrderText(e.target.value)}
+  />
+
+  <button
+    onClick={setManualDraftOrder}
+    disabled={!manualDraftOrderText.trim()}
+    className={outlineButtonClass}
+  >
+    Set Manual Draft Order
+  </button>
+
+  <div className="text-xs text-stone-500">
+    Use exact names from Pool Members, one per line.
+  </div>
+</div>
   </div>
 )}
 
