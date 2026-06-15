@@ -1135,6 +1135,46 @@ const assignPickToMember = async () => {
           <div className={panelClass}>
             <div className="p-4">
               <div className="text-lg md:text-xl font-semibold mb-3 text-stone-900">Pool Members</div>
+              {isCommissioner && (
+  <div className="mb-4 rounded-2xl border border-stone-200 bg-stone-50 p-3 grid gap-2">
+    <div className="text-sm font-semibold text-stone-900">
+      Commissioner Rename Player
+    </div>
+
+    <select
+      className="border rounded-2xl p-2"
+      value={renameMemberId}
+      onChange={(e) => setRenameMemberId(e.target.value)}
+    >
+      <option value="">Select player</option>
+
+      {members.map((member) => (
+        <option
+          key={member.id}
+          value={member.userId || member.id}
+        >
+          {member.userName}
+        </option>
+      ))}
+    </select>
+
+    <input
+      className="border rounded-2xl p-2"
+      placeholder="New display name"
+      value={renameText}
+      onChange={(e) => setRenameText(e.target.value)}
+    />
+
+    <button
+      onClick={renamePoolMember}
+      disabled={!renameMemberId || !renameText.trim()}
+      className={buttonClass}
+    >
+      Rename Player
+    </button>
+  </div>
+)}
+
               {members.length === 0 ? (
                 <div className="text-sm text-stone-500">No members yet.</div>
               ) : (
