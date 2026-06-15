@@ -760,9 +760,6 @@ const assignPickToMember = async () => {
             <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
               <div className="text-[10px] uppercase tracking-[0.2em] text-stone-500">On The Clock</div>
               <div className="mt-1 text-xl font-bold text-stone-900">{currentDrafter?.userName || "Commissioner: set draft order"}</div>
-              <div className={`mt-1 text-3xl font-black tabular-nums ${remainingSeconds <= 10 ? "text-red-700" : "text-emerald-700"}`}>
-                {String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:{String(remainingSeconds % 60).padStart(2, "0")}
-              </div>
               {draftOrder.length > 0 && (
                 <div className="mt-2 text-xs text-stone-500">
                   Order: {draftOrder.map((id) => members.find((m) => m.userId === id || m.id === id)?.userName || "Unknown").join(" → ")}
