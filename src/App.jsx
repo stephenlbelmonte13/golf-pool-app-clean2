@@ -60,6 +60,8 @@ const [assignedPlayerId, setAssignedPlayerId] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [viewMode, setViewMode] = useState("pool");
   const [manualDraftOrderText, setManualDraftOrderText] = useState("");
+  const [renameMemberId, setRenameMemberId] = useState("");
+const [renameText, setRenameText] = useState("");
   const [nickname, setNickname] = useState("");
   const [now, setNow] = useState(Date.now());
 
@@ -452,7 +454,19 @@ const displayName = nickname.trim() || user?.displayName || user?.email || "Play
     setError("");
     setActivePoolCode(code);
   };
+const renamePoolMember = async () => {
+  if (!isCommissioner || !activePoolCode || !renameMemberId || !renameText.trim()) return;
 
+  const member = members.find((m) => m.userId === renameMemberId || m.id === renameMemberId);
+  if (!member) return;
+
+  await updateDoc(doc(db, "pools", activePoolCode, "members", member.userId || member.id), {
+    userName: renameText.trim(),
+  });
+
+  setRenameMemberId("");
+  setRenameText("");
+};
   const copyInviteLink = async () => {
     if (!activePoolCode || typeof window === "undefined") return;
     const url = `${window.location.origin}${window.location.pathname}?pool=${activePoolCode}`;
