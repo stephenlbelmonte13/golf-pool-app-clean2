@@ -470,12 +470,30 @@ const renamePoolMember = async () => {
   const member = members.find((m) => m.userId === renameMemberId || m.id === renameMemberId);
   if (!member) return;
 
-  await updateDoc(doc(db, "pools", activePoolCode, "members", member.userId || member.id), {
-    userName: renameText.trim(),
+  const newName = renameText.trim();
+  const memberId = member.userId || member.id;
+
+  await updateDoc(doc(db, "pools", activePoolCode, "members", memberId), {
+    userName: newName,
   });
+
+  const memberPicks = picks.filter(
+    (pick) =>
+      pick.pool === activePoolCode &&
+      (pick.userId === memberId || pick.userId === member.userId || pick.userId === member.id)
+  );
+
+  await Promise.all(
+    memberPicks.map((pick) =>
+      updateDoc(doc(db, "picks", pick.id), {
+        userName: newName,
+      })
+    )
+  );
 
   setRenameMemberId("");
   setRenameText("");
+  setError("");
 };
   const copyInviteLink = async () => {
     if (!activePoolCode || typeof window === "undefined") return;
