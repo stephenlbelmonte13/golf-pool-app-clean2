@@ -809,10 +809,11 @@ const assignPickToMember = async () => {
         Set Manual Draft Order
       </button>
 
-      <div className="text-xs text-stone-500">
+            <div className="text-xs text-stone-500">
         Use exact nicknames from Pool Members, one per line.
       </div>
     </div>
+  </div>
 )}
 
             <select
