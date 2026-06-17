@@ -440,17 +440,27 @@ const displayName = nickname.trim() || user?.displayName || user?.email || "Play
       setError("Pool not found.");
       return;
     }
-    await setDoc(
-      doc(db, "pools", code, "members", user.uid),
-      {
-        userId: user.uid,
-        userName: displayName,
-        email: user.email || "",
-        joinedAt: serverTimestamp(),
-        role: "member",
-      },
-      { merge: true }
-    );
+   const memberRef = doc(db, "pools", code, "members", user.uid);
+const existingMember = await getDoc(memberRef);
+
+if (existingMember.exists()) {
+  await setDoc(
+    memberRef,
+    {
+      userId: user.uid,
+      email: user.email || "",
+    },
+    { merge: true }
+  );
+} else {
+  await setDoc(memberRef, {
+    userId: user.uid,
+    userName: displayName,
+    email: user.email || "",
+    joinedAt: serverTimestamp(),
+    role: "member",
+  });
+}
     setError("");
     setActivePoolCode(code);
   };
