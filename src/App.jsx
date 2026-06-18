@@ -398,13 +398,6 @@ const setManualDraftOrder = async () => {
 
   setError("");
 };
-  const nextPick = async () => {
-    if (!isCommissioner || !activePoolCode || draftOrder.length === 0) return;
-    await updateDoc(doc(db, "pools", activePoolCode), {
-      currentPickIndex: currentPickIndex + 1,
-      currentPickStartedAtMillis: Date.now(),
-    });
-  };
 
   const resetDraftClock = async () => {
     if (!isCommissioner || !activePoolCode) return;
