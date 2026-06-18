@@ -817,22 +817,31 @@ const assignPickToMember = async () => {
               )}
             </div>
 
-            {isCommissioner && (
+          {isCommissioner && (
   <div className="grid gap-2">
-    <div className="grid gap-2 md:grid-cols-2">
-      <button onClick={openDraft} disabled={draftOpen} className={outlineButtonClass}>
+    <div className="grid gap-2 md:grid-cols-3">
+      <button
+        onClick={openDraft}
+        disabled={draftOpen}
+        className={outlineButtonClass}
+      >
         Open Draft
       </button>
 
-      <button onClick={closeDraft} disabled={!draftOpen} className={outlineButtonClass}>
+      <button
+        onClick={closeDraft}
+        disabled={!draftOpen}
+        className={outlineButtonClass}
+      >
         Lock Draft
-        <button
-  onClick={nextPick}
-  disabled={!draftOrder.length}
-  className={outlineButtonClass}
->
-  Next Pick
-</button>
+      </button>
+
+      <button
+        onClick={nextPick}
+        disabled={!draftOrder.length}
+        className={buttonClass}
+      >
+        Next Pick
       </button>
     </div>
 
