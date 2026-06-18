@@ -851,7 +851,13 @@ const assignPickToMember = async () => {
       >
         Set Manual Draft Order
       </button>
-
+<button
+  onClick={nextPick}
+  disabled={!draftOrder.length}
+  className={outlineButtonClass}
+>
+  Next Pick
+</button>
             <div className="text-xs text-stone-500">
         Use exact nicknames from Pool Members, one per line.
       </div>
