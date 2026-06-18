@@ -315,6 +315,14 @@ const snakeIndex = isSnakeReverse
 const currentDrafterId = draftSize
   ? draftOrder[snakeIndex]
   : "";
+  const nextPick = async () => {
+  if (!isCommissioner || !activePoolCode || draftOrder.length === 0) return;
+
+  await updateDoc(doc(db, "pools", activePoolCode), {
+    currentPickIndex: currentPickIndex + 1,
+    currentPickStartedAtMillis: Date.now(),
+  });
+};
   const currentDrafter = members.find((member) => member.userId === currentDrafterId || member.id === currentDrafterId) || null;
   const pickStartedAtMillis = poolSettings?.currentPickStartedAtMillis || Date.now();
   const elapsedSeconds = Math.max(0, Math.floor((now - pickStartedAtMillis) / 1000));
@@ -818,6 +826,13 @@ const assignPickToMember = async () => {
 
       <button onClick={closeDraft} disabled={!draftOpen} className={outlineButtonClass}>
         Lock Draft
+        <button
+  onClick={nextPick}
+  disabled={!draftOrder.length}
+  className={outlineButtonClass}
+>
+  Next Pick
+</button>
       </button>
     </div>
 
