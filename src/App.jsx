@@ -48,6 +48,7 @@ export default function SharedPgaPoolApp() {
   const [fieldPlayers, setFieldPlayers] = useState([]);
   const [selectedPlayerId, setSelectedPlayerId] = useState("");
   const [liveBoard, setLiveBoard] = useState({});
+  const [thruByPlayer, setThruByPlayer] = useState({});
   const [selectedBoardPlayerId, setSelectedBoardPlayerId] = useState("");
   const [loadingTournaments, setLoadingTournaments] = useState(false);
   const [loadingField, setLoadingField] = useState(false);
@@ -58,6 +59,8 @@ export default function SharedPgaPoolApp() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [viewMode, setViewMode] = useState("pool");
   const [now, setNow] = useState(Date.now());
+  const [renameMemberId, setRenameMemberId] = useState("");
+  const [renameText, setRenameText] = useState("");
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (nextUser) => setUser(nextUser));
@@ -200,50 +203,30 @@ export default function SharedPgaPoolApp() {
       try {
         setLoadingScores(true);
         setError("");
-
         let cursor = null;
         let keepGoing = true;
         const allResults = [];
 
         while (keepGoing) {
-          const cursorParam =
-            cursor !== null && cursor !== undefined
-              ? `&cursor=${encodeURIComponent(cursor)}`
-              : "";
-
+          const cursorParam = cursor ? `&cursor=${cursor}` : "";
           const data = await apiFetch(
             `/tournament_results?tournament_ids[]=${selectedTournamentId}&per_page=100${cursorParam}`
           );
-
           allResults.push(...(data.data || []));
-
           cursor = data.meta?.next_cursor ?? null;
-          keepGoing = cursor !== null && cursor !== undefined;
+          keepGoing = Boolean(cursor);
         }
 
         const board = {};
         allResults.forEach((result) => {
           const playerId = String(result.player.id);
-          const rawToPar = result.par_relative_score;
-          const rawTotal = result.total_score;
-
           board[playerId] = {
             playerId,
             playerName: result.player.display_name,
             position: result.position,
-            positionNumeric:
-              result.position_numeric === null ||
-              result.position_numeric === undefined
-                ? null
-                : Number(result.position_numeric),
-            toPar:
-              rawToPar === null || rawToPar === undefined
-                ? null
-                : Number(rawToPar),
-            totalScore:
-              rawTotal === null || rawTotal === undefined
-                ? null
-                : Number(rawTotal),
+            positionNumeric: result.position_numeric,
+            toPar: result.par_relative_score == null ? null : Number(result.par_relative_score),
+            totalScore: result.total_score == null ? null : Number(result.total_score),
             earnings: result.earnings ?? null,
             country: result.player.country || "",
             raw: result,
@@ -252,7 +235,6 @@ export default function SharedPgaPoolApp() {
 
         setLiveBoard(board);
         setLastUpdated(new Date());
-
         if (!selectedBoardPlayerId && Object.keys(board).length) {
           setSelectedBoardPlayerId(Object.keys(board)[0]);
         }
@@ -267,6 +249,54 @@ export default function SharedPgaPoolApp() {
 
     fetchLiveLeaderboard();
     const interval = setInterval(fetchLiveLeaderboard, 30000);
+    return () => clearInterval(interval);
+  }, [selectedTournamentId]);
+
+  useEffect(() => {
+    if (!selectedTournamentId) return;
+
+    const fetchScorecards = async () => {
+      try {
+        let cursor = null;
+        let keepGoing = true;
+        const allHoles = [];
+
+        while (keepGoing) {
+          const cursorParam = cursor ? `&cursor=${cursor}` : "";
+          const data = await apiFetch(
+            `/player_scorecards?tournament_ids[]=${selectedTournamentId}&per_page=100${cursorParam}`
+          );
+          allHoles.push(...(data.data || []));
+          cursor = data.meta?.next_cursor ?? null;
+          keepGoing = Boolean(cursor);
+        }
+
+        const roundsByPlayer = {};
+        allHoles.forEach((hole) => {
+          const playerId = String(hole.player?.id ?? "");
+          const round = Number(hole.round_number);
+          const holeNumber = Number(hole.hole_number);
+          if (!playerId || !Number.isFinite(round) || !Number.isFinite(holeNumber)) return;
+          if (!roundsByPlayer[playerId]) roundsByPlayer[playerId] = {};
+          if (!roundsByPlayer[playerId][round]) roundsByPlayer[playerId][round] = new Set();
+          if (hole.score != null) roundsByPlayer[playerId][round].add(holeNumber);
+        });
+
+        const nextThru = {};
+        Object.entries(roundsByPlayer).forEach(([playerId, rounds]) => {
+          const roundNumbers = Object.keys(rounds).map(Number).sort((a,b)=>b-a);
+          const latestRound = roundNumbers[0];
+          nextThru[playerId] = latestRound ? rounds[latestRound].size : null;
+        });
+        setThruByPlayer(nextThru);
+      } catch (err) {
+        console.error("Scorecard load error:", err);
+        setThruByPlayer({});
+      }
+    };
+
+    fetchScorecards();
+    const interval = setInterval(fetchScorecards, 30000);
     return () => clearInterval(interval);
   }, [selectedTournamentId]);
 
@@ -425,6 +455,15 @@ export default function SharedPgaPoolApp() {
     window.setTimeout(() => setCopiedInvite(false), 1500);
   };
 
+  const renamePoolMember = async () => {
+    if (!isCommissioner || !activePoolCode || !renameMemberId || !renameText.trim()) return;
+    await updateDoc(doc(db, "pools", activePoolCode, "members", renameMemberId), {
+      userName: renameText.trim(),
+    });
+    setRenameMemberId("");
+    setRenameText("");
+  };
+
   const selectedPlayer = useMemo(
     () => fieldPlayers.find((p) => p.id === selectedPlayerId) || null,
     [fieldPlayers, selectedPlayerId]
@@ -468,9 +507,12 @@ export default function SharedPgaPoolApp() {
       .filter((pick) => pick.tournamentId === selectedTournamentId)
       .map((pick) => {
         const live = liveBoard[pick.playerId] || null;
+        const member = members.find((item) => item.userId === pick.userId || item.id === pick.userId);
         return {
           ...pick,
+          userName: member?.userName || pick.userName,
           position: live?.position || "—",
+          thru: thruByPlayer[pick.playerId] ?? null,
           toPar: live?.toPar ?? null,
           totalScore: live?.totalScore ?? null,
           country: live?.country || "",
@@ -481,17 +523,18 @@ export default function SharedPgaPoolApp() {
         const bScore = b.toPar ?? Number.MAX_SAFE_INTEGER;
         return aScore - bScore || a.golfer.localeCompare(b.golfer);
       });
-  }, [picks, selectedTournamentId, liveBoard]);
+  }, [picks, selectedTournamentId, liveBoard, members, thruByPlayer]);
 
   const leaderboardRows = useMemo(() => {
     return Object.values(liveBoard)
+      .map((row) => ({ ...row, thru: thruByPlayer[row.playerId] ?? null }))
       .filter((row) => row.playerName.toLowerCase().includes(search.trim().toLowerCase()))
       .sort((a, b) => {
         const aPos = typeof a.positionNumeric === "number" ? a.positionNumeric : Number.MAX_SAFE_INTEGER;
         const bPos = typeof b.positionNumeric === "number" ? b.positionNumeric : Number.MAX_SAFE_INTEGER;
         return aPos - bPos || a.playerName.localeCompare(b.playerName);
       });
-  }, [liveBoard, search]);
+  }, [liveBoard, search, thruByPlayer]);
 
   const cutLine = useMemo(() => {
     if (!leaderboardRows.length) return null;
@@ -509,19 +552,18 @@ export default function SharedPgaPoolApp() {
       .forEach((pick) => {
         const live = liveBoard[pick.playerId];
         const score = live?.toPar ?? 0;
-        if (!totals[pick.userName]) totals[pick.userName] = { total: 0, picks: [] };
-        totals[pick.userName].total += score;
-        totals[pick.userName].picks.push({
-          golfer: pick.golfer,
-          position: live?.position || "—",
-          score,
-        });
+        const member = members.find((item) => item.userId === pick.userId || item.id === pick.userId);
+        const userName = member?.userName || pick.userName;
+        const ownerKey = pick.userId || userName;
+        if (!totals[ownerKey]) totals[ownerKey] = { userName, total: 0, picks: [] };
+        totals[ownerKey].userName = userName;
+        totals[ownerKey].total += score;
+        totals[ownerKey].picks.push({ golfer: pick.golfer, position: live?.position || "—", score });
       });
-
     return Object.entries(totals)
-      .map(([userName, value]) => ({ userName, ...value }))
+      .map(([ownerKey, value]) => ({ ownerKey, ...value }))
       .sort((a, b) => a.total - b.total || a.userName.localeCompare(b.userName));
-  }, [picks, selectedTournamentId, liveBoard]);
+  }, [picks, selectedTournamentId, liveBoard, members]);
 
   const selectedBoardPlayer = selectedBoardPlayerId ? liveBoard[selectedBoardPlayerId] : null;
   const tournamentLeader = leaderboardRows[0] || null;
@@ -775,6 +817,7 @@ export default function SharedPgaPoolApp() {
                         <th className="text-left py-2">Owner</th>
                         <th className="text-left py-2">Golfer</th>
                         <th className="text-left py-2">Pos</th>
+                        <th className="text-left py-2">Thru</th>
                         <th className="text-left py-2">To Par</th>
                         <th className="text-left py-2">Total</th>
                         <th className="text-left py-2">Cut</th>
@@ -786,6 +829,7 @@ export default function SharedPgaPoolApp() {
                           <td className="py-3 font-medium">{row.userName}</td>
                           <td className="py-3">{row.golfer}</td>
                           <td className="py-3">{row.position}</td>
+                          <td className="py-3 font-semibold tabular-nums">{row.thru === null ? "NS" : row.thru}</td>
                           <td className={`py-3 text-xl md:text-2xl tabular-nums ${row.toPar < 0 ? "text-green-700 font-bold" : row.toPar > 0 ? "text-red-700 font-bold" : "font-bold text-stone-700"}`}>
                             {formatScore(row.toPar)}
                           </td>
@@ -806,6 +850,7 @@ export default function SharedPgaPoolApp() {
                       <th className="text-left py-2">Pos</th>
                       <th className="text-left py-2">Player</th>
                       <th className="text-left py-2">Country</th>
+                      <th className="text-left py-2">Thru</th>
                       <th className="text-left py-2">To Par</th>
                       <th className="text-left py-2">Total</th>
                       <th className="text-left py-2">Cut</th>
@@ -821,6 +866,7 @@ export default function SharedPgaPoolApp() {
                         <td className="py-3 font-semibold tabular-nums">{row.position || "—"}</td>
                         <td className="py-3 font-semibold text-stone-900">{row.playerName}</td>
                         <td className="py-3">{row.country || "—"}</td>
+                        <td className="py-3 font-semibold tabular-nums">{row.thru === null ? "NS" : row.thru}</td>
                         <td className={`py-3 text-xl md:text-2xl tabular-nums ${row.toPar < 0 ? "text-green-700 font-bold" : row.toPar > 0 ? "text-red-700 font-bold" : "font-bold text-stone-700"}`}>
                           {formatScore(row.toPar)}
                         </td>
@@ -848,7 +894,7 @@ export default function SharedPgaPoolApp() {
               ) : (
                 <div className="grid gap-2">
                   {poolLeaderboard.map((entry, index) => (
-                    <div key={entry.userName} className={`border rounded-2xl p-3 ${index === 0 ? "bg-emerald-50 border-emerald-300" : "bg-white"}`}>
+                    <div key={entry.ownerKey} className={`border rounded-2xl p-3 ${index === 0 ? "bg-emerald-50 border-emerald-300" : "bg-white"}`}>
                       <div className="flex items-center justify-between">
                         <div className="font-medium">{entry.userName}</div>
                         <div className={entry.total < 0 ? "text-green-700 text-xl font-bold tabular-nums" : entry.total > 0 ? "text-red-700 text-xl font-bold tabular-nums" : "text-xl font-bold text-stone-700 tabular-nums"}>
@@ -873,6 +919,36 @@ export default function SharedPgaPoolApp() {
           <div className={panelClass}>
             <div className="p-4">
               <div className="text-lg md:text-xl font-semibold mb-3 text-stone-900">Pool Members</div>
+              {isCommissioner && (
+                <div className="mb-4 rounded-2xl border border-stone-200 bg-stone-50 p-3 grid gap-2">
+                  <div className="text-sm font-semibold text-stone-900">Commissioner Rename Player</div>
+                  <select
+                    className="border rounded-2xl p-2"
+                    value={renameMemberId}
+                    onChange={(e) => {
+                      const nextId = e.target.value;
+                      setRenameMemberId(nextId);
+                      const selectedMember = members.find((member) => (member.userId || member.id) === nextId);
+                      setRenameText(selectedMember?.userName || "");
+                    }}
+                  >
+                    <option value="">Select player</option>
+                    {members.map((member) => (
+                      <option key={member.id} value={member.userId || member.id}>{member.userName}</option>
+                    ))}
+                  </select>
+                  <input
+                    className="border rounded-2xl p-2"
+                    placeholder="New display name"
+                    value={renameText}
+                    onChange={(e) => setRenameText(e.target.value)}
+                  />
+                  <button onClick={renamePoolMember} disabled={!renameMemberId || !renameText.trim()} className={buttonClass}>
+                    Rename Player
+                  </button>
+                </div>
+              )}
+
               {members.length === 0 ? (
                 <div className="text-sm text-stone-500">No members yet.</div>
               ) : (
