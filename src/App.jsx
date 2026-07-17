@@ -200,20 +200,50 @@ export default function SharedPgaPoolApp() {
       try {
         setLoadingScores(true);
         setError("");
-        const data = await apiFetch(
-          `/tournament_results?tournament_ids[]=${selectedTournamentId}&per_page=100`
-        );
+
+        let cursor = null;
+        let keepGoing = true;
+        const allResults = [];
+
+        while (keepGoing) {
+          const cursorParam =
+            cursor !== null && cursor !== undefined
+              ? `&cursor=${encodeURIComponent(cursor)}`
+              : "";
+
+          const data = await apiFetch(
+            `/tournament_results?tournament_ids[]=${selectedTournamentId}&per_page=100${cursorParam}`
+          );
+
+          allResults.push(...(data.data || []));
+
+          cursor = data.meta?.next_cursor ?? null;
+          keepGoing = cursor !== null && cursor !== undefined;
+        }
 
         const board = {};
-        (data.data || []).forEach((result) => {
+        allResults.forEach((result) => {
           const playerId = String(result.player.id);
+          const rawToPar = result.par_relative_score;
+          const rawTotal = result.total_score;
+
           board[playerId] = {
             playerId,
             playerName: result.player.display_name,
             position: result.position,
-            positionNumeric: result.position_numeric,
-            toPar: Number(result.par_relative_score ?? 0),
-            totalScore: Number(result.total_score ?? 0),
+            positionNumeric:
+              result.position_numeric === null ||
+              result.position_numeric === undefined
+                ? null
+                : Number(result.position_numeric),
+            toPar:
+              rawToPar === null || rawToPar === undefined
+                ? null
+                : Number(rawToPar),
+            totalScore:
+              rawTotal === null || rawTotal === undefined
+                ? null
+                : Number(rawTotal),
             earnings: result.earnings ?? null,
             country: result.player.country || "",
             raw: result,
@@ -222,6 +252,7 @@ export default function SharedPgaPoolApp() {
 
         setLiveBoard(board);
         setLastUpdated(new Date());
+
         if (!selectedBoardPlayerId && Object.keys(board).length) {
           setSelectedBoardPlayerId(Object.keys(board)[0]);
         }
